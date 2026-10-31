@@ -58,8 +58,14 @@ namespace HamJi.Core
                 if (_loaded) return;
                 if (!TryLoad(FilePath))
                 {
+                    // 文件不存在 / 空文件 = 首次运行，属于正常空数据，绝不能当成损坏拦截写入
+                    if (!File.Exists(FilePath) || SafeLength(FilePath) == 0)
+                    {
+                        _items = new List<QsoRecord>();
+                        _blockPersist = false;
+                    }
                     // 主文件读不了就回退到备份，仍不行则保留现场并停止写入，绝不覆盖
-                    if (TryLoad(BackupPath))
+                    else if (TryLoad(BackupPath))
                     {
                         _lastError = "主数据文件损坏，已从备份恢复";
                         TryQuarantine(FilePath);
@@ -79,8 +85,14 @@ namespace HamJi.Core
             Normalize();
         }
 
+        private static long SafeLength(string path)
+        {
+            try { return new FileInfo(path).Length; } catch { return -1; }
+        }
+
         private static bool TryLoad(string path)
         {
+            Android.Util.Log.Info("HamJiStore", "try " + path + " exists=" + File.Exists(path));
             try
             {
                 if (!File.Exists(path) || new FileInfo(path).Length == 0) return false;
@@ -90,8 +102,11 @@ namespace HamJi.Core
                 _items = list;
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
+                long len = -1;
+                try { len = new FileInfo(path).Length; } catch { }
+                Android.Util.Log.Info("HamJiStore", "load fail " + path + " len=" + len + " : " + ex.GetType().Name + " " + ex.Message);
                 return false;
             }
         }
