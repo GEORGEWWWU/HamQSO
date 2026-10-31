@@ -15,6 +15,17 @@ bin/Release/net10.0-android/com.hamji.app-Signed.apk
 
 ## 变更记录
 
+### v1.1.0（当前）
+- **修复「所有按钮都点不动」**：Xamarin 的 `View.Touch` 事件默认把事件标记为已处理，导致 Click 永远不触发
+  （只有输入框没挂这个监听，所以只有输入框能用）。改为 `SetOnTouchListener` 并显式 `return false`。
+- **图标主体跑到左上角**：原来靠 `<group>` 的 scale/translate 缩放 24 单位路径，变换顺序不对。
+  改成把路径坐标直接换算到 108×108 画布，不再用 group。
+- **底部导航重做**：选中态是一块独立滑块，padding 加大（宽 = 1/3 − 10dp，高 = 栏高 − 12dp）；
+  点击弹簧滑到目标，按住可左右拖拽并在按下时放大到 1.07，松手按位置 + 甩动速度弹到最近 tab
+  （欠阻尼弹簧 k=240, c=26，逐帧积分，接近 iOS 26 的「水滴」手感）。
+- **云上传入口**：频率页/日志页右上角悬浮圆形图标按钮，仅入口无功能，设置页自动隐藏。
+- 对话框换成圆角主题，不再是系统方块；`allowBackup=false`。
+
 ### v1.0.3（真机通过）
 OPPO Find X9 / ColorOS 17 / Android 17 / 16KB 页实测：冷启动 307ms，无 FATAL。
 
