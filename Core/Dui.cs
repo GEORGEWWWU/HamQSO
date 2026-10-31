@@ -3,7 +3,6 @@ using Android.Content;
 using Android.Content.Res;
 using Android.Graphics;
 using Android.Graphics.Drawables;
-using Android.Content.Res;
 using Android.Views;
 using Android.Widget;
 
@@ -198,11 +197,17 @@ namespace HamJi.Core
                 switch (e.ActionMasked)
                 {
                     case MotionEventActions.Down:
-                        v.Animate().ScaleX(_scale).ScaleY(_scale).SetDuration(90).Start();
+                        v.Animate().Cancel();
+                        v.PivotX = v.Width / 2f;
+                        v.PivotY = v.Height / 2f;
+                        v.Animate().ScaleX(_scale).ScaleY(_scale).SetDuration(90)
+                            .SetInterpolator(new Android.Views.Animations.DecelerateInterpolator()).Start();
                         break;
                     case MotionEventActions.Up:
                     case MotionEventActions.Cancel:
-                        v.Animate().ScaleX(1f).ScaleY(1f).SetDuration(180).Start();
+                        v.Animate().Cancel();
+                        v.Animate().ScaleX(1f).ScaleY(1f).SetDuration(200)
+                            .SetInterpolator(new Android.Views.Animations.OvershootInterpolator(1.2f)).Start();
                         break;
                 }
                 return false;

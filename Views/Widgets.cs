@@ -12,15 +12,6 @@ namespace HamJi.Views
 {
     public static class Widgets
     {
-        public static Drawable RowRipple(float radiusDp = 16f)
-        {
-            var mask = new GradientDrawable();
-            mask.SetColor(Color.White);
-            mask.SetCornerRadius(Dui.Dpf(radiusDp));
-            return new RippleDrawable(ColorStateList.ValueOf(new Color(Dui.WithAlpha(Dui.Accent, 46))),
-                new ColorDrawable(Color.Transparent), mask);
-        }
-
         public static TextView Chip(string text)
         {
             var tv = Dui.Label(text, 10.5f, Dui.Accent, true);
@@ -116,7 +107,7 @@ namespace HamJi.Views
             row.SetPadding(Dui.Dp(14), Dui.Dp(11), Dui.Dp(12), Dui.Dp(11));
             row.Clickable = true;
             row.Focusable = true;
-            row.SetBackgroundDrawable(RowRipple(18));
+            HamJi.Core.Touch.Press(row, 0.985f);
 
             int fg = danger ? Dui.Danger : Dui.TextPrimary;
             var bubble = new FrameLayout(Dui.Ctx);

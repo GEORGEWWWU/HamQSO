@@ -26,15 +26,16 @@ namespace HamJi.Pages
             hero.SetGravity(GravityFlags.CenterHorizontal);
             hero.SetPadding(Dui.Dp(22), Dui.Dp(26), Dui.Dp(22), Dui.Dp(18));
 
+            // 直接用 App 自己的图标图形（radio-tower），不再拿功能图标凑数
             var badge = new FrameLayout(Context);
             var g = new GradientDrawable(GradientDrawable.Orientation.TopBottom, new[] { Dui.AccentFill, Dui.AccentFill2 });
-            g.SetCornerRadius(Dui.Dpf(24));
+            g.SetCornerRadius(Dui.Dpf(22));
             badge.SetBackgroundDrawable(g);
             badge.ClipToOutline = true;
             badge.OutlineProvider = ViewOutlineProvider.Background;
             badge.Elevation = Dui.Dpf(10);
-            var ic = Dui.Icon(Resource.Drawable.ic_freq, 40, Color.White);
-            badge.AddView(ic, new FrameLayout.LayoutParams(Dui.Dp(40), Dui.Dp(40)) { Gravity = GravityFlags.Center });
+            var ic = Dui.Icon(Resource.Drawable.ic_tower, 78, Color.White);
+            badge.AddView(ic, new FrameLayout.LayoutParams(Dui.Dp(78), Dui.Dp(78)) { Gravity = GravityFlags.Center });
             hero.AddView(badge, new LinearLayout.LayoutParams(Dui.Dp(78), Dui.Dp(78)) { Gravity = GravityFlags.CenterHorizontal });
 
             var name = Dui.Label("Ham记", 20f, Dui.TextPrimary, true);
@@ -63,6 +64,7 @@ namespace HamJi.Pages
             card2.AddView(Row(Resource.Drawable.ic_info, "版本", AppInfo.VersionName, null));
             card2.AddView(Row(Resource.Drawable.ic_settings, "主题", Dui.Dark ? "深色 · 跟随系统" : "浅色 · 跟随系统", null));
             card2.AddView(Row(Resource.Drawable.ic_clock, "数据存储", "仅本机", null));
+            card2.AddView(Row(Resource.Drawable.ic_export, "源码仓库", "GitHub", OpenRepo));
             ListHost.AddView(card2);
         }
 
@@ -78,6 +80,22 @@ namespace HamJi.Pages
             var row = Widgets.SettingRow(icon, title, value, danger, onClick != null);
             if (onClick != null) row.Click += (s2, e2) => onClick();
             return row;
+        }
+
+        private const string RepoUrl = "https://github.com/GEORGEWWWU/HamQSO";
+
+        private void OpenRepo()
+        {
+            try
+            {
+                var intent = new Intent(Intent.ActionView, Android.Net.Uri.Parse(RepoUrl));
+                intent.AddFlags(ActivityFlags.NewTask);
+                Context.StartActivity(intent);
+            }
+            catch (Exception ex)
+            {
+                Toast.MakeText(Context, "无法打开浏览器：" + ex.Message, ToastLength.Short).Show();
+            }
         }
 
         private void ShowDataStatus()

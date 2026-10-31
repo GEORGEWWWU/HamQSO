@@ -148,6 +148,53 @@ namespace HamJi.Core
             Changed?.Invoke();
         }
 
+        /// <summary>按 Id 查找记录。</summary>
+        public static QsoRecord Find(string id)
+        {
+            EnsureLoaded();
+            if (string.IsNullOrEmpty(id)) return null;
+            return _items.FirstOrDefault(x => x.Id == id);
+        }
+
+        /// <summary>最后保存时间（数据文件写入时间）。</summary>
+        public static DateTime LastUpdated
+        {
+            get
+            {
+                EnsureLoaded();
+                try
+                {
+                    if (File.Exists(FilePath)) return File.GetLastWriteTime(FilePath);
+                }
+                catch { }
+                return DateTime.Now;
+            }
+        }
+
+        /// <summary>更新已有记录；不存在则插入。用于长按编辑后保存。</summary>
+        public static void Update(QsoRecord rec)
+        {
+            EnsureLoaded();
+            if (rec == null) return;
+            if (string.IsNullOrEmpty(rec.Id)) rec.Id = Guid.NewGuid().ToString("N");
+            lock (Gate)
+            {
+                int i = _items.FindIndex(x => x.Id == rec.Id);
+                if (i >= 0)
+                {
+                    if (rec.Created == 0) rec.Created = _items[i].Created;
+                    _items[i] = rec;
+                }
+                else
+                {
+                    if (rec.Created == 0) rec.Created = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    _items.Add(rec);
+                }
+            }
+            Persist();
+            Changed?.Invoke();
+        }
+
         public static void Remove(string id)
         {
             EnsureLoaded();

@@ -333,7 +333,7 @@ namespace HamJi.Views
 
             var bg = new GradientDrawable(GradientDrawable.Orientation.TopBottom, new[] { Dui.AccentFill, Dui.AccentFill2 });
             bg.SetCornerRadius(Dui.Dpf(30));
-            Background = Dui.Ripple(Dui.WithAlpha(Color.White, 60), bg);
+            Background = bg;
             ClipToOutline = true;
             OutlineProvider = ViewOutlineProvider.Background;
             Elevation = Dui.Dpf(14);
@@ -355,7 +355,7 @@ namespace HamJi.Views
             Focusable = true;
 
             var bg = Dui.Round(Dui.WithAlpha(Dui.CardBg, 235), 23);
-            Background = Dui.Ripple(Dui.WithAlpha(Dui.Accent, 40), bg);
+            Background = bg;
             ClipToOutline = true;
             OutlineProvider = ViewOutlineProvider.Background;
             Elevation = Dui.Dpf(8);

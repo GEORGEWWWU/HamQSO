@@ -19,7 +19,7 @@ namespace HamJi.Pages
             TitleView.Text = "通联频率";
             SubtitleView.Text = items.Count == 0
                 ? "守听到的通联频点都记在这里"
-                : "共 " + items.Count + " 条频点 · 全部保存在本地";
+                : UpdatedLine(items.Count, "条频点");
 
             RenderGrouped(items, Row, Resource.Drawable.ic_freq,
                 "还没有频点记录", "点击右下角的 + 记录你的第一段频率");
@@ -31,7 +31,7 @@ namespace HamJi.Pages
             row.SetPadding(Dui.Dp(14), Dui.Dp(10), Dui.Dp(14), Dui.Dp(10));
             row.Clickable = true;
             row.Focusable = true;
-            row.SetBackgroundDrawable(Widgets.RowRipple(18));
+            row.LongClickable = true;
 
             var l1 = Dui.HBox();
             var freq = Dui.Label(rec.FreqText, 21f, Dui.TextPrimary, true);
@@ -72,6 +72,8 @@ namespace HamJi.Pages
             row.AddView(l2);
 
             row.Click += (s, e) => ShowDetail(rec);
+            row.LongClick += (s, e) => { e.Handled = true; OpenEditor(rec); };
+            HamJi.Core.Touch.Press(row, 0.985f);
             return row;
         }
     }
@@ -86,7 +88,7 @@ namespace HamJi.Pages
             TitleView.Text = "通联日志";
             SubtitleView.Text = items.Count == 0
                 ? "每一次通联，都值得被记住"
-                : "共 " + items.Count + " 次通联 · 全部保存在本地";
+                : UpdatedLine(items.Count, "次通联");
 
             RenderGrouped(items, Row, Resource.Drawable.ic_log,
                 "还没有通联日志", "点击右下角的 + 记录你的第一次通联");
@@ -98,7 +100,7 @@ namespace HamJi.Pages
             row.SetPadding(Dui.Dp(14), Dui.Dp(10), Dui.Dp(14), Dui.Dp(10));
             row.Clickable = true;
             row.Focusable = true;
-            row.SetBackgroundDrawable(Widgets.RowRipple(18));
+            row.LongClickable = true;
 
             var l1 = Dui.HBox();
             var call = Dui.Label(string.IsNullOrWhiteSpace(rec.Call) ? "未填写呼号" : rec.Call.ToUpperInvariant(),
@@ -139,6 +141,8 @@ namespace HamJi.Pages
             }
 
             row.Click += (s, e) => ShowDetail(rec);
+            row.LongClick += (s, e) => { e.Handled = true; OpenEditor(rec); };
+            HamJi.Core.Touch.Press(row, 0.985f);
             return row;
         }
     }

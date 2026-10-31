@@ -43,6 +43,9 @@ namespace HamJi
         private EditText _freq, _notes, _call, _rstTx, _rstRx, _qth, _rig, _power, _ant;
         private TextView _dateBtn, _timeBtn;
         private ModeDropdown _mode;
+        private TextView _titleView, _subView;
+        private string[] _modes = ModeNames;
+        private QsoRecord _editing;
 
         private RecKind _kind = RecKind.Frequency;
         private DateTime _when = DateTime.Now;
@@ -62,6 +65,12 @@ namespace HamJi
             Window.SetStatusBarColor(Color.Transparent);
             Window.SetNavigationBarColor(Color.Transparent);
             if ((int)Build.VERSION.SdkInt >= 30) Window.SetDecorFitsSystemWindows(false);
+
+            var editId = Intent?.GetStringExtra("edit_id");
+            if (!string.IsNullOrEmpty(editId))
+            {
+                try { _editing = Store.Find(editId); } catch { }
+            }
             BuildUi();
         }
 
@@ -98,13 +107,14 @@ namespace HamJi
             var titleBox = Dui.VBox();
             var t = Dui.Label("新建记录", 19f, Dui.TextPrimary, true);
             var st = Dui.Label("记录一次守听或一次通联 · 可上拉铺满", 11.5f, Dui.TextTertiary, false);
+            _titleView = t;
+            _subView = st;
             var stlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent) { TopMargin = Dui.Dp(3) };
             titleBox.AddView(t);
             titleBox.AddView(st, stlp);
             head.AddView(titleBox, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f) { Gravity = GravityFlags.CenterVertical });
 
             var close = new FrameLayout(this);
-            close.SetBackgroundDrawable(Widgets.RowRipple(18));
             close.Clickable = true;
             var ci = Dui.Icon(Resource.Drawable.ic_close, 18, Dui.TextSecondary);
             close.AddView(ci, new FrameLayout.LayoutParams(Dui.Dp(18), Dui.Dp(18)) { Gravity = GravityFlags.Center });
@@ -165,7 +175,7 @@ namespace HamJi
             save.SetTypeface(Dui.Medium, TypefaceStyle.Normal);
             var sbg = new GradientDrawable(GradientDrawable.Orientation.TopBottom, new[] { Dui.AccentFill, Dui.AccentFill2 });
             sbg.SetCornerRadius(Dui.Dpf(16));
-            save.SetBackgroundDrawable(Dui.Ripple(Dui.WithAlpha(Color.White, 70), sbg));
+            save.SetBackgroundDrawable(sbg);
             save.Clickable = true;
             HamJi.Core.Touch.Bind(save, Save, 0.97f);
             saveWrap.AddView(save, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, Dui.Dp(52)));
@@ -179,6 +189,7 @@ namespace HamJi
             _root.SetOnApplyWindowInsetsListener(new SheetInsets(this));
 
             BuildForm();
+            if (_editing != null) Prefill();
 
             _sheet.Post(() =>
             {
@@ -188,6 +199,34 @@ namespace HamJi
                 _sheet.Animate().TranslationY(0f).SetDuration(300).SetInterpolator(new DecelerateInterpolator(1.5f)).Start();
                 _scrim.Animate().Alpha(1f).SetDuration(220).Start();
             });
+        }
+
+        private void Prefill()
+        {
+            var r = _editing;
+            if (r == null) return;
+
+            _titleView.Text = "编辑记录";
+            _subView.Text = "修改后点击保存 · 不改动直接退出则放弃";
+
+            _when = r.LocalTime;
+            // 用列表里一致的格式化结果回填，避免出现 "1" 这种截断感
+            _freq.Text = r.Freq > 0 ? r.FreqText : "";
+            _notes.Text = r.Notes ?? "";
+            _call.Text = r.Call ?? "";
+            _rstTx.Text = r.RstTx ?? "";
+            _rstRx.Text = r.RstRx ?? "";
+            _qth.Text = r.Qth ?? "";
+            _rig.Text = r.Rig ?? "";
+            _power.Text = r.Power ?? "";
+            _ant.Text = r.Ant ?? "";
+
+            int mi = Array.IndexOf(_modes, (r.Mode ?? "").Trim());
+            _mode.Select(mi < 0 ? 0 : mi, false);
+
+            _kind = (RecKind)r.Kind;
+            if (r.IsLog) _seg.Select(1); else BuildForm();
+            RefreshTimeText();
         }
 
         private void CreateInputs()
@@ -202,7 +241,13 @@ namespace HamJi
             _power = Input("功率 W", InputTypes.ClassNumber | InputTypes.NumberFlagDecimal);
             _ant = Input("天线 / 频段", InputTypes.ClassText);
 
-            _mode = new ModeDropdown(this, ModeNames);
+            if (_editing != null && !string.IsNullOrWhiteSpace(_editing.Mode)
+                && Array.IndexOf(ModeNames, _editing.Mode) < 0)
+            {
+                var list = new System.Collections.Generic.List<string>(ModeNames) { _editing.Mode };
+                _modes = list.ToArray();
+            }
+            _mode = new ModeDropdown(this, _modes);
             _mode.LayoutParameters = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, Dui.Dp(48));
             _mode.Select(0, false);
         }
@@ -584,14 +629,12 @@ namespace HamJi
                 return;
             }
 
-            var rec = new QsoRecord
-            {
-                Kind = (int)_kind,
-                Freq = freq,
-                Mode = _mode.SelectedText,
-                Time = new DateTimeOffset(DateTime.SpecifyKind(_when, DateTimeKind.Local)).ToUnixTimeMilliseconds(),
-                Notes = (_notes.Text ?? "").Trim()
-            };
+            var rec = _editing ?? new QsoRecord();
+            rec.Kind = (int)_kind;
+            rec.Freq = freq;
+            rec.Mode = _mode.SelectedText;
+            rec.Time = new DateTimeOffset(DateTime.SpecifyKind(_when, DateTimeKind.Local)).ToUnixTimeMilliseconds();
+            rec.Notes = (_notes.Text ?? "").Trim();
 
             if (_kind == RecKind.Log)
             {
@@ -604,8 +647,16 @@ namespace HamJi
                 rec.Ant = (_ant.Text ?? "").Trim();
             }
 
-            Store.Add(rec);
-            Toast.MakeText(this, "已保存", ToastLength.Short).Show();
+            if (_editing != null)
+            {
+                Store.Update(rec);
+                Toast.MakeText(this, "已更新", ToastLength.Short).Show();
+            }
+            else
+            {
+                Store.Add(rec);
+                Toast.MakeText(this, "已保存", ToastLength.Short).Show();
+            }
             Close(true);
         }
 
@@ -772,8 +823,9 @@ namespace HamJi
             SetPadding(Dui.Dp(12), 0, Dui.Dp(10), 0);
 
             _label = Dui.Label("", 15f, Dui.TextPrimary, false);
-            AddView(_label, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.MatchParent)
-            { Gravity = GravityFlags.Left | GravityFlags.CenterVertical });
+            _label.Gravity = GravityFlags.Center;
+            AddView(_label, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent)
+            { Gravity = GravityFlags.Center });
 
             var chev = Dui.Icon(Resource.Drawable.ic_chevron, 16, Dui.TextTertiary);
             chev.Rotation = 90f;
@@ -799,9 +851,9 @@ namespace HamJi
             {
                 var tv = Dui.Label(_names[i], 14f, i == _sel ? Dui.Accent : Dui.TextPrimary, i == _sel);
                 tv.SetPadding(Dui.Dp(14), 0, Dui.Dp(14), 0);
-                tv.Gravity = GravityFlags.CenterVertical;
+                tv.Gravity = GravityFlags.Center;
                 tv.Clickable = true;
-                tv.SetBackgroundDrawable(Widgets.RowRipple(12));
+                HamJi.Core.Touch.Press(tv, 0.96f);
                 int idx = i;
                 tv.Click += (s, e) =>
                 {
