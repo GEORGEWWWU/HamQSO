@@ -12,8 +12,8 @@
     <AssemblyName>HamJi</AssemblyName>
     <ApplicationId>com.hamji.app</ApplicationId>
     <ApplicationTitle>Ham记</ApplicationTitle>
-    <ApplicationVersion>1</ApplicationVersion>
-    <ApplicationDisplayVersion>1.0.0</ApplicationDisplayVersion>
+    <ApplicationVersion>2</ApplicationVersion>
+    <ApplicationDisplayVersion>1.0.1</ApplicationDisplayVersion>
 
     <RuntimeIdentifiers>android-arm64;android-arm</RuntimeIdentifiers>
 

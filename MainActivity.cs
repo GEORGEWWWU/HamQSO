@@ -56,12 +56,13 @@ namespace HamJi
                 Updater.SilentCheck(this);   // 静默检查更新：有新版才打扰
                 if (savedInstanceState != null)
                 {
-                    var idx = savedInstanceState.GetInt("tab", 0);
+                    var idx = savedInstanceState.GetInt("tab", 1);
                     ShowPage(idx, false);
                 }
                 else
                 {
-                    ShowPage(0, false);
+                    // 默认落在通联日志页
+                    ShowPage(1, false);
                 }
             }
             catch (System.Exception ex)
@@ -314,9 +315,13 @@ namespace HamJi
         private void OpenNew()
         {
             var intent = new Intent(this, typeof(NewRecordActivity));
+            // 当前在哪一页新建，就打开对应的类型（0=通联频率，1=通联日志）
+            intent.PutExtra("kind", _current == 1 ? 1 : 0);
             StartActivity(intent);
             OverridePendingTransition(0, 0);
         }
+
+        private bool _firstResume = true;
 
         protected override void OnResume()
         {
@@ -326,7 +331,9 @@ namespace HamJi
                 Dui.Init(this);
                 AppTheme.Apply();
                 ApplyBarIcons();
-                _currentPage?.Refresh();
+                // 首次进入时页面刚构建完，再刷新一次会闪一下（内容被清空重建），跳过
+                if (_firstResume) _firstResume = false;
+                else _currentPage?.Refresh();
             }
             catch (System.Exception ex)
             {

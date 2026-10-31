@@ -48,6 +48,7 @@ namespace HamJi
         private QsoRecord _editing;
 
         private RecKind _kind = RecKind.Frequency;
+        private RecKind _wantKind = RecKind.Frequency;
         private DateTime _when = DateTime.Now;
 
         private int _statusInset, _imeInset, _navInset;
@@ -72,6 +73,12 @@ namespace HamJi
             if (!string.IsNullOrEmpty(editId))
             {
                 try { _editing = Store.Find(editId); } catch { }
+            }
+            if (_editing == null)
+            {
+                // 从哪个页面点的新建，就默认打开对应的类型
+                int kind = Intent?.GetIntExtra("kind", 0) ?? 0;
+                _wantKind = kind == 1 ? RecKind.Log : RecKind.Frequency;
             }
             BuildUi();
         }
@@ -197,6 +204,7 @@ namespace HamJi
 
             BuildForm();
             if (_editing != null) Prefill();
+            else if (_wantKind == RecKind.Log) _seg.Select(1);   // 切到「通联日志」并重建表单
 
             _sheet.Post(() =>
             {
@@ -267,7 +275,8 @@ namespace HamJi
             }
             _mode = new ModeDropdown(this, _modes);
             _mode.LayoutParameters = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, Dui.Dp(48));
-            _mode.Select(0, false);
+            int fm = Array.IndexOf(_modes, "FM");
+            _mode.Select(fm >= 0 ? fm : 0, false);   // 默认 FM
         }
 
         private void BuildForm()
@@ -916,10 +925,13 @@ namespace HamJi
             _names = names;
             Clickable = true;
             SetBackgroundDrawable(Dui.InputFieldBg());
-            SetPadding(Dui.Dp(14), 0, Dui.Dp(28), 0);
+            // 右侧留 12dp 给箭头贴边，文字区自己再让出 18dp，避免长模式名压到箭头
+            SetPadding(Dui.Dp(14), 0, Dui.Dp(12), 0);
 
             _label = Dui.Label("", 15f, Dui.TextPrimary, false);
             _label.Gravity = GravityFlags.CenterVertical | GravityFlags.Start;
+            _label.SetPadding(0, 0, Dui.Dp(18), 0);
+            _label.SetSingleLine(true);
             AddView(_label, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent)
             { Gravity = GravityFlags.Start | GravityFlags.CenterVertical });
 
