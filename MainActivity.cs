@@ -17,12 +17,14 @@ namespace HamJi
 {
     [Activity(
         Label = "Ham记",
+        Name = "com.hamji.app.MainActivity",
         Theme = "@style/AppTheme",
         MainLauncher = true,
         Exported = true,
         LaunchMode = LaunchMode.SingleTop,
         ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.Density
             | ConfigChanges.KeyboardHidden | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize)]
+    [MetaData("android.app.shortcuts", Resource = "@xml/shortcuts")]
     public class MainActivity : Activity
     {
         private FrameLayout _root;
@@ -64,6 +66,7 @@ namespace HamJi
                     // 默认落在通联日志页
                     ShowPage(1, false);
                 }
+                ApplyShortcut(Intent);
             }
             catch (System.Exception ex)
             {
@@ -84,6 +87,13 @@ namespace HamJi
             Store.Changed -= OnStoreChanged;
             Store.Error -= OnStoreError;
             base.OnDestroy();
+        }
+
+        protected override void OnNewIntent(Intent intent)
+        {
+            base.OnNewIntent(intent);
+            Intent = intent;
+            ApplyShortcut(intent);
         }
 
         private void SetupWindow()
@@ -314,11 +324,30 @@ namespace HamJi
 
         private void OpenNew()
         {
-            var intent = new Intent(this, typeof(NewRecordActivity));
             // 当前在哪一页新建，就打开对应的类型（0=通联频率，1=通联日志）
-            intent.PutExtra("kind", _current == 1 ? 1 : 0);
+            OpenNew(_current == 1 ? 1 : 0);
+        }
+
+        private void OpenNew(int kind)
+        {
+            var intent = new Intent(this, typeof(NewRecordActivity));
+            intent.PutExtra("kind", kind == 1 ? 1 : 0);
             StartActivity(intent);
             OverridePendingTransition(0, 0);
+        }
+
+        /// <summary>桌面长按快捷方式：新频率 / 新日志 → 切到对应页并直接打开新建弹层。</summary>
+        private void ApplyShortcut(Intent intent)
+        {
+            if (intent == null) return;
+            string sc;
+            try { sc = intent.GetStringExtra("shortcut"); } catch { return; }
+            if (string.IsNullOrEmpty(sc)) return;
+            try { intent.RemoveExtra("shortcut"); } catch { }
+
+            int target = sc == "log" ? 1 : 0;
+            ShowPage(target, false);
+            _root?.Post(() => OpenNew(target));
         }
 
         private bool _firstResume = true;

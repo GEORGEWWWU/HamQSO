@@ -354,22 +354,24 @@ namespace HamJi
 
             _dateBtn.Click += (s, e) =>
             {
-                var dlg = new DatePickerDialog(this, (o, ev) =>
+                var sheet = new DaySheet(this, _when);
+                sheet.Picked += dt =>
                 {
-                    _when = new DateTime(ev.Year, ev.Month + 1, ev.DayOfMonth, _when.Hour, _when.Minute, 0);
+                    _when = new DateTime(dt.Year, dt.Month, dt.Day, _when.Hour, _when.Minute, 0);
                     RefreshTimeText();
-                }, _when.Year, _when.Month - 1, _when.Day);
-                dlg.Show();
+                };
+                sheet.Show();
             };
 
             _timeBtn.Click += (s, e) =>
             {
-                var dlg = new TimePickerDialog(this, (o, ev) =>
+                var sheet = new TimeSheet(this, _when);
+                sheet.Picked += (hh, mm) =>
                 {
-                    _when = new DateTime(_when.Year, _when.Month, _when.Day, ev.HourOfDay, ev.Minute, 0);
+                    _when = new DateTime(_when.Year, _when.Month, _when.Day, hh, mm, 0);
                     RefreshTimeText();
-                }, _when.Hour, _when.Minute, true);
-                dlg.Show();
+                };
+                sheet.Show();
             };
 
             RefreshTimeText();

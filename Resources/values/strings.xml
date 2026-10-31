@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcut_freq_short">新频率</string>
+    <string name="shortcut_freq_long">记录一个新频率</string>
+    <string name="shortcut_log_short">新日志</string>
+    <string name="shortcut_log_long">记录一条新通联日志</string>
+</resources>
