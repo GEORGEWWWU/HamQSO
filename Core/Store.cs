@@ -19,6 +19,8 @@ namespace HamJi.Core
         private static List<QsoRecord> _items = new List<QsoRecord>();
         private static bool _loaded;
         private static string _file;
+        private static bool _blockPersist;
+        private static string _lastError;
 
         public static event Action Changed;
         public static event Action<string> Error;
@@ -36,29 +38,73 @@ namespace HamJi.Core
             }
         }
 
+        public static string BackupPath => FilePath + ".bak";
+
+        public static bool IsBlocked
+        {
+            get { EnsureLoaded(); return _blockPersist; }
+        }
+
+        public static string LastError
+        {
+            get { EnsureLoaded(); return _lastError; }
+        }
+
         public static void EnsureLoaded()
         {
             if (_loaded) return;
             lock (Gate)
             {
                 if (_loaded) return;
-                try
+                if (!TryLoad(FilePath))
                 {
-                    if (File.Exists(FilePath))
+                    // 主文件读不了就回退到备份，仍不行则保留现场并停止写入，绝不覆盖
+                    if (TryLoad(BackupPath))
                     {
-                        var json = File.ReadAllText(FilePath);
-                        var list = JsonSerializer.Deserialize(json, AppJson.Default.ListQsoRecord);
-                        if (list != null) _items = list;
+                        _lastError = "主数据文件损坏，已从备份恢复";
+                        TryQuarantine(FilePath);
+                        _blockPersist = false;
                     }
-                }
-                catch (Exception ex)
-                {
-                    Error?.Invoke("读取数据失败：" + ex.Message);
-                    _items = new List<QsoRecord>();
+                    else
+                    {
+                        TryQuarantine(FilePath);
+                        _blockPersist = true;
+                        _lastError = "数据文件无法读取，已停止写入以免覆盖原始数据";
+                        Error?.Invoke(_lastError);
+                        _items = new List<QsoRecord>();
+                    }
                 }
                 _loaded = true;
             }
             Normalize();
+        }
+
+        private static bool TryLoad(string path)
+        {
+            try
+            {
+                if (!File.Exists(path) || new FileInfo(path).Length == 0) return false;
+                var json = File.ReadAllText(path);
+                var list = JsonSerializer.Deserialize(json, AppJson.Default.ListQsoRecord);
+                if (list == null) return false;
+                _items = list;
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static void TryQuarantine(string path)
+        {
+            try
+            {
+                if (!File.Exists(path)) return;
+                var target = path + ".corrupt-" + DateTime.Now.ToString("yyyyMMddHHmmss");
+                File.Copy(path, target, true);
+            }
+            catch { }
         }
 
         private static void Normalize()
@@ -127,16 +173,30 @@ namespace HamJi.Core
 
         private static void Persist()
         {
+            if (_blockPersist)
+            {
+                Error?.Invoke("数据文件异常，已阻止写入以免覆盖原始数据");
+                return;
+            }
             try
             {
                 var json = JsonSerializer.Serialize(_items, AppJson.Default.ListQsoRecord);
+
+                // 写新内容前，把上一份完好的数据留作 .bak，任何一次写入失败都还能回滚
+                if (File.Exists(FilePath))
+                {
+                    try { File.Copy(FilePath, BackupPath, true); } catch { }
+                }
+
                 var tmp = FilePath + ".tmp";
                 File.WriteAllText(tmp, json);
                 File.Move(tmp, FilePath, true);
+                _lastError = null;
             }
             catch (Exception ex)
             {
-                Error?.Invoke("保存失败：" + ex.Message);
+                _lastError = "保存失败：" + ex.Message;
+                Error?.Invoke(_lastError);
             }
         }
     }

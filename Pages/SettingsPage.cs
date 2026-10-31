@@ -69,6 +69,11 @@ namespace HamJi.Pages
             // 数据
             ListHost.AddView(Widgets.SectionLabel("数据"));
             var card2 = Widgets.Card();
+            var chk = Widgets.SettingRow(Resource.Drawable.ic_info, "数据自检", "查看", false, true);
+            chk.Click += (s2, e2) => ShowDataStatus();
+            card2.AddView(chk);
+            card2.AddView(Widgets.Divider());
+
             var e1 = Widgets.SettingRow(Resource.Drawable.ic_export, "导出备份", "JSON");
             e1.Click += (s, e) => Export();
             card2.AddView(e1);
@@ -94,6 +99,35 @@ namespace HamJi.Pages
             var tip = Dui.Label("颜色与深色模式自动跟随系统设置", 11.5f, Dui.TextTertiary, false);
             tip.SetPadding(Dui.Dp(10), Dui.Dp(18), Dui.Dp(10), 0);
             ListHost.AddView(tip);
+        }
+
+        private void ShowDataStatus()
+        {
+            string info;
+            try
+            {
+                var f = Store.FilePath;
+                var exists = System.IO.File.Exists(f);
+                long size = exists ? new System.IO.FileInfo(f).Length : 0;
+                var bak = System.IO.File.Exists(Store.BackupPath);
+                var saved = exists ? System.IO.File.GetLastWriteTime(f).ToString("MM-dd HH:mm") : "—";
+                info = "记录数：" + Store.All.Count + " 条\n"
+                     + "数据文件：" + (exists ? (size < 1024 ? size + " B" : (size / 1024) + " KB") : "不存在") + "\n"
+                     + "最近写入：" + saved + "\n"
+                     + "备份副本：" + (bak ? "有（records.json.bak）" : "暂无") + "\n"
+                     + "写入状态：" + (Store.IsBlocked ? "已保护（检测到数据异常，暂停写入）" : "正常");
+                if (!string.IsNullOrEmpty(Store.LastError)) info += "\n提示：" + Store.LastError;
+            }
+            catch (Exception ex)
+            {
+                info = "读取状态失败：" + ex.Message;
+            }
+
+            new AlertDialog.Builder(Context, Resource.Style.AppDialogTheme)
+                .SetTitle("数据自检")
+                .SetMessage(info)
+                .SetPositiveButton("关闭", (s2, e2) => { })
+                .Show();
         }
 
         private void Export()
