@@ -102,6 +102,14 @@ namespace HamJi.Views
         /// <summary>设置页列表项：图标 + 标题 + 右侧值/箭头。</summary>
         public static LinearLayout SettingRow(int iconRes, string title, string value, bool danger = false, bool chevron = true, int dotColor = 0)
         {
+            TextView ignored;
+            return SettingRow(iconRes, title, value, danger, chevron, dotColor, out ignored);
+        }
+
+        /// <summary>同上，额外带回右侧值文本控件，便于异步更新（如远端版本号）。</summary>
+        public static LinearLayout SettingRow(int iconRes, string title, string value, bool danger, bool chevron, int dotColor, out TextView valueView)
+        {
+            valueView = null;
             var row = Dui.HBox();
             row.LayoutParameters = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
             row.SetPadding(Dui.Dp(16), Dui.Dp(12), Dui.Dp(14), Dui.Dp(12));
@@ -131,6 +139,7 @@ namespace HamJi.Views
                 var v = Dui.Label(value, 12.5f, Dui.TextTertiary, false);
                 v.SetSingleLine(true);
                 row.AddView(v);
+                valueView = v;
             }
 
             if (chevron)

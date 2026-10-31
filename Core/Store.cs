@@ -124,8 +124,16 @@ namespace HamJi.Core
 
         private static void Normalize()
         {
-            _items = _items.Where(x => x != null).ToList();
-            foreach (var it in _items)
+            NormalizeList(_items);
+        }
+
+        private static void NormalizeList(List<QsoRecord> items)
+        {
+            if (items == null) return;
+            var clean = items.Where(x => x != null).ToList();
+            items.Clear();
+            items.AddRange(clean);
+            foreach (var it in items)
             {
                 if (string.IsNullOrEmpty(it.Id)) it.Id = Guid.NewGuid().ToString("N");
                 it.Mode = it.Mode ?? "";
@@ -231,6 +239,56 @@ namespace HamJi.Core
             EnsureLoaded();
             var sorted = _items.OrderByDescending(x => x.Time).ToList();
             return JsonSerializer.Serialize(sorted, AppJson.Default.ListQsoRecord);
+        }
+
+        /// <summary>解析备份 JSON，返回已归一化的记录列表（不写入存储）。</summary>
+        public static List<QsoRecord> ParseBackup(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) throw new FormatException("文件内容为空");
+            var list = JsonSerializer.Deserialize(json, AppJson.Default.ListQsoRecord);
+            if (list == null) throw new FormatException("不是有效的备份文件");
+            NormalizeList(list);
+            return list;
+        }
+
+        /// <summary>合并导入：保留现有记录，只补充 Id 不存在的条目。返回新增条数。</summary>
+        public static int MergeIn(IList<QsoRecord> incoming)
+        {
+            EnsureLoaded();
+            if (incoming == null || incoming.Count == 0) return 0;
+            int added = 0;
+            lock (Gate)
+            {
+                var ids = new HashSet<string>(_items.Where(x => !string.IsNullOrEmpty(x.Id)).Select(x => x.Id));
+                foreach (var it in incoming)
+                {
+                    if (it == null) continue;
+                    if (string.IsNullOrEmpty(it.Id)) it.Id = Guid.NewGuid().ToString("N");
+                    if (!ids.Add(it.Id)) continue;
+                    _items.Add(it);
+                    added++;
+                }
+            }
+            if (added > 0)
+            {
+                Persist();
+                Changed?.Invoke();
+            }
+            return added;
+        }
+
+        /// <summary>覆盖导入：清空现有记录后完全恢复为备份内容。</summary>
+        public static void ReplaceAll(IList<QsoRecord> incoming)
+        {
+            EnsureLoaded();
+            lock (Gate)
+            {
+                _items.Clear();
+                if (incoming != null)
+                    foreach (var it in incoming) if (it != null) _items.Add(it);
+            }
+            Persist();
+            Changed?.Invoke();
         }
 
         private static void Persist()

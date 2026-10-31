@@ -19,6 +19,9 @@ namespace HamJi.Pages
         protected readonly LinearLayout ListHost;
         protected bool ShowHeader = true;
         private SwipeRow _openRow;
+        private int _insetTop;
+        private int _insetBottom;
+        private bool _insetsKnown;
 
         protected BasePage(Context c) : base(c)
         {
@@ -45,22 +48,35 @@ namespace HamJi.Pages
 
         public void ApplyInsets(int topInset, int bottomSpace)
         {
+            _insetTop = topInset;
+            _insetBottom = bottomSpace;
+            _insetsKnown = true;
+            ApplyChrome();
+        }
+
+        /// <summary>
+        /// 按当前 insets 与 ShowHeader 重排内边距。ShowHeader 可能在 OnBuild 里才被改掉，
+        /// 所以构建完必须再调一次，否则首次进入和再次进入的顶部留白会不一致。
+        /// </summary>
+        private void ApplyChrome()
+        {
             if (ShowHeader)
             {
                 Header.Visibility = ViewStates.Visible;
-                Header.SetPadding(Dui.Dp(22), topInset + Dui.Dp(12), Dui.Dp(22), Dui.Dp(6));
+                Header.SetPadding(Dui.Dp(22), _insetTop + Dui.Dp(12), Dui.Dp(22), Dui.Dp(6));
             }
             else
             {
                 Header.Visibility = ViewStates.Gone;
             }
-            ListHost.SetPadding(Dui.Dp(16), ShowHeader ? 0 : topInset + Dui.Dp(6), Dui.Dp(16), bottomSpace);
+            ListHost.SetPadding(Dui.Dp(16), ShowHeader ? 0 : _insetTop + Dui.Dp(10), Dui.Dp(16), _insetBottom);
         }
 
         public void Refresh()
         {
             ListHost.RemoveAllViews();
             OnBuild();
+            if (_insetsKnown) ApplyChrome();
         }
 
         protected abstract void OnBuild();

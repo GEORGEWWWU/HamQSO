@@ -339,6 +339,8 @@ namespace HamJi
             base.OnActivityResult(requestCode, resultCode, data);
             if (requestCode == SettingsPage.ReqExport)
                 SettingsPage.HandleExportResult(this, resultCode, data);
+            else if (requestCode == SettingsPage.ReqImport)
+                SettingsPage.HandleImportResult(this, resultCode, data);
         }
 
         private void OnStoreChanged()

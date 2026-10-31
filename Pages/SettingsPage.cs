@@ -13,10 +13,11 @@ namespace HamJi.Pages
     public class SettingsPage : BasePage
     {
         public const int ReqExport = 0x51A1;
+        public const int ReqImport = 0x51A2;
         private PopupWindow _themePop;
         public event Action<int> Navigate;
 
-        public SettingsPage(Context c) : base(c) { }
+        public SettingsPage(Context c) : base(c) { ShowHeader = false; }
 
         protected override void OnBuild()
         {
@@ -25,7 +26,7 @@ namespace HamJi.Pages
             // 顶部 App 信息：无卡片背景，直接沉浸
             var hero = Dui.VBox();
             hero.SetGravity(GravityFlags.CenterHorizontal);
-            hero.SetPadding(Dui.Dp(22), Dui.Dp(26), Dui.Dp(22), Dui.Dp(18));
+            hero.SetPadding(Dui.Dp(22), Dui.Dp(18), Dui.Dp(22), Dui.Dp(18));
 
             // 直接用 App 自己的图标图形（radio-tower），不再拿功能图标凑数
             var badge = new FrameLayout(Context);
@@ -55,6 +56,7 @@ namespace HamJi.Pages
             var card1 = Widgets.Card();
             card1.AddView(Row(Resource.Drawable.ic_info, "数据自检", "查看", ShowDataStatus));
             card1.AddView(Row(Resource.Drawable.ic_export, "导出备份", "JSON", Export));
+            card1.AddView(Row(Resource.Drawable.ic_import, "导入恢复", "JSON", Import));
             card1.AddView(Row(Resource.Drawable.ic_trash, "清空全部记录", "", ClearAll, true));
             ListHost.AddView(card1);
 
@@ -62,16 +64,52 @@ namespace HamJi.Pages
 
             // 关于
             var card2 = Widgets.Card();
-            card2.AddView(Row(Resource.Drawable.ic_info, "版本", AppInfo.VersionName, null));
-            card2.AddView(Row(Resource.Drawable.ic_update, "检查更新", "v" + AppInfo.VersionName, CheckUpdate));
+
+            // 右侧显示远端最新版本号：先给缓存值，没有就后台拉一次再回填
+            string remote = Updater.LatestTag;
+            TextView updateValue;
+            var updateRow = Widgets.SettingRow(Resource.Drawable.ic_update, "检查更新",
+                string.IsNullOrEmpty(remote) ? "检测中…" : remote, false, true, 0, out updateValue);
+            updateRow.Click += (s2, e2) => CheckUpdate();
+            card2.AddView(updateRow);
+            if (string.IsNullOrEmpty(remote))
+            {
+                Updater.EnsureLatest(Context, tag =>
+                {
+                    if (updateValue != null && !string.IsNullOrEmpty(tag)) updateValue.Text = tag;
+                });
+            }
 
             var themeRow = Widgets.SettingRow(Resource.Drawable.ic_settings, "主题色",
                 AppTheme.Names[AppTheme.Current], false, true, AppTheme.Swatch(AppTheme.Current));
             themeRow.Click += (s2, e2) => ShowThemeMenu(themeRow);
             card2.AddView(themeRow);
-            card2.AddView(Row(Resource.Drawable.ic_clock, "数据存储", "仅本机", null));
             card2.AddView(Row(Resource.Drawable.ic_export, "源码仓库", "GitHub", OpenRepo));
             ListHost.AddView(card2);
+
+            ListHost.AddView(Footer());
+        }
+
+        /// <summary>底部版权与署名。</summary>
+        private View Footer()
+        {
+            var box = Dui.VBox();
+            box.SetGravity(GravityFlags.CenterHorizontal);
+            box.SetPadding(Dui.Dp(8), Dui.Dp(26), Dui.Dp(8), Dui.Dp(14));
+
+            var sign = Dui.Label("BH7IDW", 11.5f, Dui.TextSecondary, true);
+            sign.LetterSpacing = 0.08f;
+            var slp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
+            { Gravity = GravityFlags.CenterHorizontal };
+            box.AddView(sign, slp);
+
+            var copy = Dui.Label("© 2026 Ham记 · 保留所有权利", 10.5f, Dui.TextTertiary, false);
+            copy.LetterSpacing = 0.02f;
+            var clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
+            { TopMargin = Dui.Dp(6), Gravity = GravityFlags.CenterHorizontal };
+            box.AddView(copy, clp);
+
+            return box;
         }
 
         private View Gap()
@@ -239,6 +277,79 @@ namespace HamJi.Pages
             {
                 Toast.MakeText(act, "导出失败：" + ex.Message, ToastLength.Short).Show();
             }
+        }
+
+        private void Import()
+        {
+            try
+            {
+                var intent = new Intent(Intent.ActionOpenDocument);
+                intent.AddCategory(Intent.CategoryOpenable);
+                intent.SetType("*/*");
+                intent.PutExtra(Intent.ExtraMimeTypes,
+                    new[] { "application/json", "text/plain", "application/octet-stream" });
+                ((Activity)Context).StartActivityForResult(intent, ReqImport);
+            }
+            catch (Exception ex)
+            {
+                Toast.MakeText(Context, "无法打开文件选择器：" + ex.Message, ToastLength.Short).Show();
+            }
+        }
+
+        /// <summary>读取选中的备份文件，让用户选「合并」或「覆盖」后写回存储。</summary>
+        public static void HandleImportResult(Activity act, Result resultCode, Intent data)
+        {
+            if (resultCode != Result.Ok || data?.Data == null) return;
+
+            string json;
+            try
+            {
+                using (var stream = act.ContentResolver.OpenInputStream(data.Data))
+                using (var reader = new System.IO.StreamReader(stream))
+                    json = reader.ReadToEnd();
+            }
+            catch (Exception ex)
+            {
+                Toast.MakeText(act, "读取文件失败：" + ex.Message, ToastLength.Short).Show();
+                return;
+            }
+
+            System.Collections.Generic.List<QsoRecord> list;
+            try
+            {
+                list = Store.ParseBackup(json);
+            }
+            catch (Exception ex)
+            {
+                Toast.MakeText(act, "不是有效的备份文件：" + ex.Message, ToastLength.Long).Show();
+                return;
+            }
+
+            if (list.Count == 0)
+            {
+                Toast.MakeText(act, "备份文件里没有记录", ToastLength.Short).Show();
+                return;
+            }
+
+            int have = Store.All.Count;
+            new AlertDialog.Builder(act, Resource.Style.AppDialogTheme)
+                .SetTitle("导入 " + list.Count + " 条记录")
+                .SetMessage("当前已有 " + have + " 条记录。\n\n"
+                          + "合并：保留现有记录，只补充备份里没有的条目。\n"
+                          + "覆盖：清空现有记录，完全恢复成备份内容。")
+                .SetPositiveButton("合并", (s, e) =>
+                {
+                    int n = Store.MergeIn(list);
+                    Toast.MakeText(act, n > 0 ? "已导入 " + n + " 条记录" : "没有新增记录（全部已存在）",
+                        ToastLength.Short).Show();
+                })
+                .SetNeutralButton("覆盖", (s, e) =>
+                {
+                    Store.ReplaceAll(list);
+                    Toast.MakeText(act, "已恢复 " + list.Count + " 条记录", ToastLength.Short).Show();
+                })
+                .SetNegativeButton("取消", (s, e) => { })
+                .Show();
         }
 
         private void ClearAll()

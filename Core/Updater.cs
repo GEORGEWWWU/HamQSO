@@ -18,6 +18,25 @@ namespace HamJi.Core
         private const string PrefFile = "hamji_updater";
         private const string KeySkip = "skip_tag";
 
+        private static string _latest;
+        private static DateTime _latestAt = DateTime.MinValue;
+
+        /// <summary>最近一次成功拉取到的远端版本号（形如 v1.2.0）；未知时为 null。</summary>
+        public static string LatestTag => _latest;
+
+        private static bool LatestFresh
+            => !string.IsNullOrEmpty(_latest) && (DateTime.UtcNow - _latestAt).TotalMinutes < 10;
+
+        /// <summary>取远端最新版本号用于设置页展示：10 分钟内复用缓存，否则后台拉一次。</summary>
+        public static void EnsureLatest(Context c, Action<string> done)
+        {
+            if (LatestFresh) { done(_latest); return; }
+            Check(c, r =>
+            {
+                if (r.Ok && !string.IsNullOrEmpty(r.Tag)) done(r.Tag);
+            });
+        }
+
         public class Result
         {
             public bool Ok;
@@ -72,6 +91,11 @@ namespace HamJi.Core
 
                 r.HasUpdate = Newer(r.Tag, AppVersion());
                 r.Ok = true;
+                if (!string.IsNullOrEmpty(r.Tag))
+                {
+                    _latest = r.Tag;
+                    _latestAt = DateTime.UtcNow;
+                }
             }
             catch (System.Exception ex)
             {
