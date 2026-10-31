@@ -11,7 +11,7 @@
 
 <p>
 <a href="https://github.com/GEORGEWWWU/HamQSO/releases/latest"><img src="https://img.shields.io/badge/下载-APK-1F6BFF?style=for-the-badge&logo=android&logoColor=white" alt="下载 APK" /></a>
-<a href="https://github.com/GEORGEWWWU/HamQSO/releases/latest"><img src="https://img.shields.io/badge/版本-v1.0.0-0B44C9?style=for-the-badge" alt="版本" /></a>
+<a href="https://github.com/GEORGEWWWU/HamQSO/releases/latest"><img src="https://img.shields.io/badge/版本-v1.0.1-0B44C9?style=for-the-badge" alt="版本" /></a>
 <a href="#快速开始"><img src="https://img.shields.io/badge/平台-Android%205.0+-17924F?style=for-the-badge" alt="平台" /></a>
 <a href="#项目结构"><img src="https://img.shields.io/badge/依赖-零%20AndroidX-23272E?style=for-the-badge" alt="依赖" /></a>
 </p>
@@ -91,6 +91,11 @@ NewRecordActivity.cs  底部弹层式新建 / 编辑页
 ```
 
 ## 变更记录
+
+### v1.0.1
+
+设置页：新增导入恢复（可选合并或覆盖）、检查更新右侧显示远端最新版本、移除冗余的版本与数据存储项、底部署名；
+修复底部导航滑块尺寸偏小、设置页首次进入顶部留白不一致。新建页：类型跟随来源页面、模式默认 FM。
 
 ### v1.0.0
 
