@@ -1,149 +1,107 @@
 # Ham记 · 业余无线电日记
 
-一个 UI 现代、体积很小、完全离线的安卓通联记录 App。用 C# / .NET 10 for Android 原生 View 编写，**不使用 MAUI、不使用任何 AndroidX 依赖**，因此 APK 只有约 6 MB。
+<div align="center">
 
-## 产物
+<img src="assets/logo-512.png" alt="Ham记" width="180" />
 
-```
-bin/Release/net10.0-android/com.hamji.app-Signed.apk
-```
+<h1>Ham记</h1>
 
-- minSdk 21（Android 5.0） / targetSdk 36（Android 16）
-- ABI：arm64-v8a + armeabi-v7a（单个 APK，双 ABI）
-- 权限：**0 个**（不联网、不读存储、不申请任何权限）
-- 数据落盘：`/data/data/com.hamji.app/files/records.json`，原子写入
+<p><b>业余无线电通联日记 · 完全离线 · 零权限 · 约 6 MB</b></p>
 
-## 变更记录
+<p>用 C# / .NET 10 for Android 原生 View 写的通联记录本。<br/>
+不用 MAUI，不引任何 AndroidX 依赖，不联网、不申请权限，数据只存在你自己手机里。</p>
 
-### v1.6.1（当前）
-- **修复新建页上拉铺满后卡在状态栏里**（严重）：拖拽上限原来取 `_fullH`，
-  而 `_fullH` 用的是 insets 上报的 status 高度——这个值偶尔是 0，于是「全屏高度」把弹层顶进了状态栏，
-  把手被通知栏盖住，怎么下拉都拖不动，只能按返回键。
-  现在：状态栏高度有资源兜底（`status_bar_height`），顶部安全区 = 状态栏 + 18dp；
-  拖拽/动画/insets 三处都夹紧高度；另外加了 `OnLayoutChange` 自检，越界会立刻拉回。
-- 下拉关闭阈值 0.45 → 0.5，更容易关掉。
-- 主题色偏好改同步写入（`commit()`），避免选完马上划掉 App 导致主题丢失。
+<p>
+<a href="https://github.com/GEORGEWWWU/HamQSO/releases/latest"><img src="https://img.shields.io/badge/下载-APK-1F6BFF?style=for-the-badge&logo=android&logoColor=white" alt="下载 APK" /></a>
+<a href="https://github.com/GEORGEWWWU/HamQSO/releases/latest"><img src="https://img.shields.io/badge/版本-v1.0.0-0B44C9?style=for-the-badge" alt="版本" /></a>
+<a href="#快速开始"><img src="https://img.shields.io/badge/平台-Android%205.0+-17924F?style=for-the-badge" alt="平台" /></a>
+<a href="LICENSE"><img src="https://img.shields.io/badge/许可-MIT-6D4AD8?style=for-the-badge" alt="许可" /></a>
+</p>
 
-### v1.6.0
-- 模式下拉文字改为「左对齐 + 左侧留白 + 右侧给箭头让位」（上一版居中，和频率输入框不一致）
-- 输入约束（实时过滤，中文输入法的全角字符自动折半角）：
-  频率/功率只允许数字与一个小数点；呼号只允许字母数字与 `/` 并**自动大写**；
-  RST 只允许数字与 +/-；呼号/设备/天线 40 字、备注 200 字上限
-- 页头「最后更新于今天 / 昨天 / M月d日」
-- 修复长按进入编辑时弹层先闪一下：弹层首帧 alpha=0，位置摆好后再淡入
-- **编辑已有记录时锁死类型**：另一侧选项置灰且不可点，杜绝「日志记录被改成频点」
-- 弹层吃掉空白处的点击（之前点分段以外的空白会穿透到遮罩把弹层关掉）
-- 设置项图标去掉底色块、放大到 21dp、与标题间距收窄；顶部 logo 用 App 自身图形
-- **主题色**：设置 → 主题色，下拉可选 蓝 / 石墨黑 / 银白 / 森林绿 / 琥珀黄 / 砖红 / 深紫，
-  纯色不渐变；明暗仍跟随系统（深色模式下按钮自动换更实的填充色保证白字可读），
-  选择后立即重建界面并持久化
+<p>
+<a href="#功能">功能</a> ·
+<a href="#截图">截图</a> ·
+<a href="#快速开始">快速开始</a> ·
+<a href="#构建">构建</a> ·
+<a href="#数据存储">数据存储</a> ·
+<a href="#项目结构">项目结构</a>
+</p>
 
-### v1.5.0
-- 模式下拉的文字真正居中（之前把 `Gravity` 设在了 LayoutParams 上，TextView 自身还是左上默认值）
-- 所有按钮/列表项/设置项去掉按压背景高亮，改为按压缩放（0.985~0.97，松手回弹）
-- 左滑删除重做：拖动改由 `onInterceptTouchEvent` 接管，子视图会正常收到 CANCEL，
-  小幅滑动松手不会再“卡住按压态”；删除按钮改为**独立圆形填充按钮 + 垃圾桶图标**，
-  与卡片之间留 10dp 间距，点击两次确认（第一次变深红）
-- 页头副标题：`共 N 条 · 最后更新于 yyyy年M月d日`（取数据文件写入时间）
-- 长按记录进入编辑：拉起同一张新建页，自动回填全部字段，标题变「编辑记录」；
-  不点保存直接退出即放弃（不改动任何数据），保存则按 Id 更新原记录
-- 设置页顶部的 logo 换成 App 自身的图标图形；新增「源码仓库」跳转 GitHub
+</div>
 
-### v1.1.0
-- **修复「所有按钮都点不动」**：Xamarin 的 `View.Touch` 事件默认把事件标记为已处理，导致 Click 永远不触发
-  （只有输入框没挂这个监听，所以只有输入框能用）。改为 `SetOnTouchListener` 并显式 `return false`。
-- **图标主体跑到左上角**：原来靠 `<group>` 的 scale/translate 缩放 24 单位路径，变换顺序不对。
-  改成把路径坐标直接换算到 108×108 画布，不再用 group。
-- **底部导航重做**：选中态是一块独立滑块，padding 加大（宽 = 1/3 − 10dp，高 = 栏高 − 12dp）；
-  点击弹簧滑到目标，按住可左右拖拽并在按下时放大到 1.07，松手按位置 + 甩动速度弹到最近 tab
-  （欠阻尼弹簧 k=240, c=26，逐帧积分，接近 iOS 26 的「水滴」手感）。
-- **云上传入口**：频率页/日志页右上角悬浮圆形图标按钮，仅入口无功能，设置页自动隐藏。
-- 对话框换成圆角主题，不再是系统方块；`allowBackup=false`。
-
-### v1.0.3（真机通过）
-OPPO Find X9 / ColorOS 17 / Android 17 / 16KB 页实测：冷启动 307ms，无 FATAL。
-
-三个独立闪退原因（逐层剥开）：
-1. `dlopen failed: cannot locate symbol "compressed_assembly_count"` —— 关掉 `AndroidEnableAssemblyCompression`
-   后生成的 `libxamarin-app.so` 不再导出该符号，但预编译的 `libmonodroid.so` 仍引用它。**这两个开关别手动改**，用 SDK 默认。
-2. `IllegalArgumentException: Invalid ID: 60` @ `ColorSpace.get` ← `LinearGradient` ——
-   绑定里 **没有** `(float,float,float,float,int,int,TileMode)` 重载，只有 `Color/Color` 与 `Int64/Int64`；
-   传 int 会命中 Int64 版本，Android 17 把 long 当 wide-gamut 颜色 → 崩。**必须传 `new Color(argb)`**。
-3. `No implementation found for MainActivity.n_onCreate` ——
-   切换构建属性后增量构建，JNI typemap 与 `libxamarin-app.so` 不一致。**改 csproj/清单后必须 `rm -rf obj bin`**。
-
-同时 `android:allowBackup` 改为 `false`（纯本地应用，避免云备份回灌数据）。
-
-### v1.0.1（修复启动闪退·初版）
-真机（OPPO Find X9 / ColorOS 17 / Android 17）安装后秒退、界面不显示，原因是打包方式：
-
-- v1.0.0 的 APK 里 `lib/*/**.so` 是 **deflate 压缩**，同时 manifest 是 **`extractNativeLibs=false`**（targetSdk≥23 默认值）。
-  这种组合下系统会直接从 APK 里 mmap `.so`，压缩条目无法映射 → `dlopen` 失败 → 进程秒退。
-- 修复：`AndroidUseLegacyPackaging=true`（manifest 写入 `extractNativeLibs=true`，安装时解压原生库）
-  + `AndroidEnableAssemblyCompression=false`。已核对新包 manifest 为 `extractNativeLibs=true`。
-- 同时把 `TrimMode` 从 `link`（全裁剪）改为 `partial`，避免 Release 裁剪引发的启动期异常。
-- 增加启动兜底：托管异常不再直接闪退，而是渲染一页可复制的错误详情（并写入 `files/crash.log`）。
-
-### v1.0.0
-首个版本。
+---
 
 ## 功能
 
-| Tab | 内容 |
-| --- | --- |
-| 通联频率 | 按天分组的频点记录（频率 / 模式 / 接收时间 / 备注），最新在前 |
-| 通联日志 | 按天分组的通联记录（呼号 / 频率 / 模式 / 时间 / RST / QTH / 设备 / 功率 / 天线 / 备注） |
-| 设置 | 大头像 + 记录概览 + 导出 JSON 备份 + 清空数据 + 版本信息 |
+<div align="center">
 
-- 右下角浮动 + 按钮为频率页/日志页共用，进入设置页自动收起
-- 新建页为底部抽屉：先选「通联频率 / 通联日志」，再展开对应表单；未保存退出即丢弃
-- 列表项：点击查看详情、长按删除（带二次确认）
-- 深色/浅色自动跟随系统，主色蓝 `#1F6BFF`（深色 `#5B9CFF`）
-- 亚克力：背景渐变 + 柔光；底部导航栏为悬浮胶囊，对当前页面做降采样 + 分离式盒式模糊（纯 C# 实现，Android 5.0 起表现一致，不依赖 RenderEffect）
-- 沉浸式：`setDecorFitsSystemWindows(false)`（API 30+）/ `LAYOUT_FULLSCREEN`（API 21~29），状态栏与手势条全透明、无黑边；列表内容延伸到底部导航栏下方
-- Android 12+ 系统强制启动画面，已把 `windowSplashScreenAnimatedIcon` 换成透明 drawable 并把背景色设为与 App 一致，视觉上直接进入首页
+| 记录 | 管理 | 个性化 |
+|:---:|:---:|:---:|
+| 频点 / 通联日志两类 | 搜索 · 排序 · 筛选 | 7 套主题色 |
+| 上下行频率、CTCSS、哑音 | 长按编辑 · 左滑删除 | 明暗跟随系统 |
+| 呼号、RST、QTH、设备、功率、天线 | 下拉刷新 · 空态引导 | 纯色无渐变 |
+| 备注、时间戳 | JSON 导入 / 导出 | 无广告无统计 |
+
+</div>
+
+- **两类记录**：通联频率（频点，含上下行、CTCSS、哑音、模式）与通联日志（QSO，含呼号、RST、QTH、设备、功率、天线、备注）。
+- **输入实时约束**：频率/功率只接受数字与一个小数点；呼号只接受字母、数字与 `/` 并自动大写；中文输入法的全角字符自动折半角。
+- **编辑时锁类型**：已保存的记录不能从日志改成频点，反之亦然。
+- **完全离线**：0 权限、0 网络请求、0 第三方 SDK。
+
+## 截图
+
+<div align="center">
+<img src="assets/screens/home.png" width="30%" alt="首页" />
+<img src="assets/screens/log.png" width="30%" alt="日志" />
+<img src="assets/screens/settings.png" width="30%" alt="设置" />
+</div>
+
+## 快速开始
+
+```
+https://github.com/GEORGEWWWU/HamQSO/releases/latest
+```
+
+下载最新 APK，手机上允许「未知来源」后安装即可。首次打开会生成两条示例记录，长按可编辑，左滑可删除。
 
 ## 构建
 
-需要 .NET 10 SDK + android workload、JDK 17、Android SDK Platform 36。
-
 ```bash
-dotnet workload install android
-
-export ANDROID_HOME=/c/android-dev/sdk
-export JAVA_HOME=/c/android-dev/jdk/jdk-17.0.21.0.2+1
 dotnet build HamJi.csproj -c Release \
-  -p:AndroidSdkDirectory=C:/android-dev/sdk \
-  -p:JavaSdkDirectory=C:/android-dev/jdk/jdk-17.0.21.0.2+1
+  -p:AndroidSdkDirectory=<sdk> \
+  -p:JavaSdkDirectory=<jdk17>
 ```
 
-安装到设备：
+产物：`bin/Release/net10.0-android/com.hamji.app-Signed.apk`
 
-```bash
-adb install -r bin/Release/net10.0-android/com.hamji.app-Signed.apk
-```
+- minSdk 21（Android 5.0） / targetSdk 36（Android 16）
+- ABI：arm64-v8a + armeabi-v7a 单包
+- 需要 JDK 17 与 Android SDK（.NET 10 for Android 工作负载）
 
-> Release 包默认用 debug keystore 签名，方便直接安装体验；正式发布请改成自己的 keystore（`AndroidKeyStore=true` + `AndroidSigningKeyStore` 等属性）。
+## 数据存储
 
-## 体积优化点
+记录写在 `/data/data/com.hamji.app/files/records.json`，**原子写入**（先写临时文件再 rename），断电也不会写坏。
+设置页可导出 / 导入 JSON 做备份。
 
-- 不引入 MAUI / AndroidX / Material，界面全部用平台 View + 自绘 drawable
-- `PublishTrimmed=true`、`TrimMode=link`、`AndroidLinkMode=Full`、`AndroidLinkTool=r8`
-- 关闭 AOT / Profiled AOT / Debugger / EventSource
-- `AndroidUseAssemblyStore=true` + `AndroidEnableAssemblyCompression=true`（托管程序集压缩进 `libassembly-store.so`）
-- 只打包 arm64 + arm 两个 ABI（模拟器用的 x86/x64 不打包）
-- 图标全部为矢量，无位图资源
-- 图标：应用图标取自 Material Design Icons 的 `radio-tower`（Apache-2.0，临时占位，可随时替换）
-- 注意：`.so` 必须**不要**压缩 + `extractNativeLibs=false` 同时出现，否则 Android 15+ / 新机型上会启动即崩
-
-想更小可以只保留 `android-arm64`（约 4 MB）。
-
-## 目录
+## 项目结构
 
 ```
-Core/     Dui(设计系统/颜色/可绘制)、Model、Store(JSON 本地存储)
-Views/    Backdrop/GlassPanel/ImgBlur、NavBar、Fab、Widgets(卡片/行/空状态)
-Pages/    BasePage(分组列表)、ListPages(频率/日志)、SettingsPage
-MainActivity.cs          三个 Tab 的宿主、沉浸式、Insets、亚克力刷新
-NewRecordActivity.cs     底部抽屉式新建页（分段选择器 / 模式选择 / 日期时间）
+Core/        Dui（UI 工具箱）、Store（数据）、AppTheme、Filters（输入约束）
+Pages/       首页各分页（频点、日志、设置）
+Views/       列表卡片、分段控件、小组件
+Resources/   纯手写 drawable / values，不用 AndroidX
+NewRecordActivity.cs  底部弹层式新建 / 编辑页
 ```
+
+## 变更记录
+
+### v1.0.0
+
+首个正式版。包含：两类记录、实时输入约束、编辑锁类型、7 套主题色、导入导出、明暗跟随系统。
+
+<div align="center">
+
+<sub>用 .NET 10 for Android 手写 · 为业余无线电爱好者</sub>
+
+</div>
