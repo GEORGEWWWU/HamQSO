@@ -50,7 +50,7 @@
 ## 截图
 
 <div align="center">
-<img src="shots/hamqso.png" width="100%" alt="应用截图" />
+<img src="assets/hamqso.png" width="100%" alt="应用截图" />
 </div>
 
 ## 快速开始
