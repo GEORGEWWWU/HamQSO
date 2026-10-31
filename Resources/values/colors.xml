@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <color name="bg_top">#FFF3F7FC</color>
+  <color name="bg_bottom">#FFE7EFFA</color>
+  <color name="blob_a">#FFBFD6FF</color>
+  <color name="blob_b">#FFD8C9FF</color>
+  <color name="blob_c">#FFB7EBF7</color>
+
+  <color name="text_primary">#FF0C1622</color>
+  <color name="text_secondary">#FF5B6C7E</color>
+  <color name="text_tertiary">#FF8A99A9</color>
+
+  <color name="card_bg">#D9FFFFFF</color>
+  <color name="card_border">#8AFFFFFF</color>
+  <color name="hairline">#14202E</color>
+
+  <color name="accent">#FF1F6BFF</color>
+  <color name="accent_deep">#FF0B4FD1</color>
+  <color name="accent_soft">#FFE6EEFF</color>
+  <color name="accent_text">#FFFFFFFF</color>
+  <color name="accent_fill">#FF2B74FF</color>
+  <color name="accent_fill2">#FF0B44C9</color>
+
+  <color name="chip_bg">#14203B66</color>
+  <color name="chip_on">#FF1F6BFF</color>
+
+  <color name="nav_bg">#A8FFFFFF</color>
+  <color name="nav_border">#99FFFFFF</color>
+  <color name="nav_icon">#FF6B7C8E</color>
+  <color name="nav_icon_on">#FF1F6BFF</color>
+
+  <color name="input_bg">#8CFFFFFF</color>
+  <color name="input_border">#2E14282E</color>
+
+  <color name="scrim">#66000B18</color>
+  <color name="sheet_bg">#FFF7FAFD</color>
+  <color name="danger">#FFE03E3E</color>
+  <color name="icon_bg">#FF1F6BFF</color>
+</resources>
