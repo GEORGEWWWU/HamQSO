@@ -193,6 +193,7 @@ namespace HamJi
 
             SetContentView(_root);
             _root.SetOnApplyWindowInsetsListener(new SheetInsets(this));
+            _sheet.AddOnLayoutChangeListener(new SheetGuard(this));
 
             BuildForm();
             if (_editing != null) Prefill();
@@ -474,16 +475,14 @@ namespace HamJi
             _imeInset = ime;
             _navInset = nav;
 
-            int screenH = Resources.DisplayMetrics.HeightPixels;
+            // 顶部上限：状态栏 + 10dp（insets 偶尔会上报 0，必须兜底，否则弹层会顶进状态栏）
+            int topSafe = TopSafeHeight();
+            _fullH = MaxSheetHeight();
+
+            var lp = (FrameLayout.LayoutParams)_sheet.LayoutParameters;
 
             // 弹层底边：有键盘时压在键盘上沿，无键盘时贴屏幕底（盖住手势条）
-            int bottomGap = ime;
-            var lp = (FrameLayout.LayoutParams)_sheet.LayoutParameters;
-            lp.BottomMargin = bottomGap;
-
-            // 顶部上限：始终停在状态栏下方（留 12dp，避免下拉手势被系统通知栏抢走）
-            int topSafe = status + Dui.Dp(12);
-            _fullH = Math.Max(Dui.Dp(280), screenH - bottomGap - topSafe);
+            lp.BottomMargin = ime;
 
             // 保存按钮下方让出系统手势条（键盘显示时不需要）
             if (_saveWrap != null)
@@ -497,6 +496,12 @@ namespace HamJi
                 if (ime > 0) lp.Height = _fullH;
                 else lp.Height = _fitH > 0 ? Math.Min(_fitH, _fullH) : Math.Min(Dui.Dp(520), _fullH);
             }
+            else if (lp.Height > _fullH)
+            {
+                // 拖拽过程中 insets 变化（如键盘弹出）也不能让高度越界
+                lp.Height = _fullH;
+            }
+            lp.Height = Math.Max(Dui.Dp(240), Math.Min(lp.Height, _fullH));
             _sheet.LayoutParameters = lp;
 
             // 表单区是唯一可伸缩部分：限高 = 可用高度 - 固定部分
@@ -505,6 +510,30 @@ namespace HamJi
             _scroll.RequestLayout();
 
             if (ime > 0 && CurrentFocus is EditText) EnsureVisible(CurrentFocus);
+        }
+
+        /// <summary>状态栏高度（insets 为 0 时从系统资源兜底）。</summary>
+        private int StatusBarHeight()
+        {
+            if (_statusInset > 0) return _statusInset;
+            try
+            {
+                int id = Resources.GetIdentifier("status_bar_height", "dimen", "android");
+                if (id > 0) return Resources.GetDimensionPixelSize(id);
+            }
+            catch { }
+            return Dui.Dp(24);
+        }
+
+        /// <summary>弹层顶部允许到达的最小 y（状态栏下再留 10dp 给下拉手势）。</summary>
+        private int TopSafeHeight() => StatusBarHeight() + Dui.Dp(18);
+
+        /// <summary>当前允许的最大弹层高度：屏幕 - 键盘 - 顶部安全区。</summary>
+        private int MaxSheetHeight()
+        {
+            int screenH = Resources.DisplayMetrics.HeightPixels;
+            int h = screenH - _imeInset - TopSafeHeight();
+            return Math.Max(Dui.Dp(240), h);
         }
 
         /// <summary>除表单区以外的固定高度（标题区 + 分段 + 保存区 + 内边距）。</summary>
@@ -546,9 +575,44 @@ namespace HamJi
             catch { return 0; }
         }
 
+        /// <summary>万一弹层高度越界（顶进状态栏），立刻夹回可用范围。</summary>
+        internal void EnsureSheetInBounds()
+        {
+            try
+            {
+                var lp = (FrameLayout.LayoutParams)_sheet.LayoutParameters;
+                if (lp == null || lp.Height <= 0) return;
+                int max = MaxSheetHeight();
+                if (lp.Height > max)
+                {
+                    lp.Height = max;
+                    _sheet.LayoutParameters = lp;
+                }
+            }
+            catch { }
+        }
+
+        private class SheetGuard : Java.Lang.Object, View.IOnLayoutChangeListener
+        {
+            private readonly NewRecordActivity _a;
+            public SheetGuard(NewRecordActivity a) { _a = a; }
+
+            public void OnLayoutChange(View v, int l, int t, int r, int b, int ol, int ot, int or, int ob)
+            {
+                int h = b - t;
+                if (h <= 0) return;
+                if (h > _a.MaxSheetHeight() + 1)
+                {
+                    v.Post(_a.EnsureSheetInBounds);
+                }
+            }
+        }
+
         private void SetSheetHeight(int h)
         {
             var lp = (FrameLayout.LayoutParams)_sheet.LayoutParameters;
+            h = Math.Max(Dui.Dp(240), Math.Min(h, MaxSheetHeight()));
+            if (lp.Height == h) return;
             lp.Height = h;
             _sheet.LayoutParameters = lp;
         }
@@ -587,7 +651,8 @@ namespace HamJi
                 {
                     case MotionEventActions.Down:
                         _a._dragSheet = true;
-                        _a._startH = _a._sheet.Height > 0 ? _a._sheet.Height : _a._fitH;
+                        _a._startH = _a._sheet.Height > 0 ? _a._sheet.Height
+                            : (_a._fitH > 0 ? Math.Min(_a._fitH, _a.MaxSheetHeight()) : _a.MaxSheetHeight());
                         _a._downRawY = e.RawY;
                         try { _a._heightAnim?.Cancel(); } catch { }
                         return true;
@@ -595,9 +660,8 @@ namespace HamJi
                     case MotionEventActions.Move:
                         if (!_a._dragSheet) return true;
                         int h = (int)(_a._startH - (e.RawY - _a._downRawY));
-                        int min = Dui.Dp(240);
-                        int max = _a._fullH > 0 ? _a._fullH : h;
-                        h = Math.Max(min, Math.Min(max, h));
+                        int max = _a.MaxSheetHeight();
+                        h = Math.Max(Dui.Dp(240), Math.Min(max, h));
                         _a.SetSheetHeight(h);
                         return true;
 
@@ -606,8 +670,9 @@ namespace HamJi
                         if (!_a._dragSheet) return true;
                         _a._dragSheet = false;
                         int cur = _a._sheet.Height;
-                        if (cur < _a._fullH * 0.45f) { _a.Close(false); return true; }
-                        int target = cur > _a._fullH * 0.8f ? _a._fullH : (_a._fitH > 0 ? _a._fitH : cur);
+                        int maxH = _a.MaxSheetHeight();
+                        if (cur < maxH * 0.5f) { _a.Close(false); return true; }
+                        int target = cur > maxH * 0.8f ? maxH : (_a._fitH > 0 ? Math.Min(_a._fitH, maxH) : cur);
                         _a.AnimateHeight(cur, target);
                         return true;
                 }

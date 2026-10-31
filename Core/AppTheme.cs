@@ -42,7 +42,8 @@ namespace HamJi.Core
             try
             {
                 var sp = c.GetSharedPreferences(PrefFile, FileCreationMode.Private);
-                sp.Edit().PutInt(PrefKey, Current).Apply();
+                // 必须同步落盘：apply() 是异步的，用户选完色马上划掉 App 会丢
+                sp.Edit().PutInt(PrefKey, Current).Commit();
             }
             catch { }
         }
