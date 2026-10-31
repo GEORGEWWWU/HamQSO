@@ -15,7 +15,7 @@
 <a href="https://github.com/GEORGEWWWU/HamQSO/releases/latest"><img src="https://img.shields.io/badge/下载-APK-1F6BFF?style=for-the-badge&logo=android&logoColor=white" alt="下载 APK" /></a>
 <a href="https://github.com/GEORGEWWWU/HamQSO/releases/latest"><img src="https://img.shields.io/badge/版本-v1.0.0-0B44C9?style=for-the-badge" alt="版本" /></a>
 <a href="#快速开始"><img src="https://img.shields.io/badge/平台-Android%205.0+-17924F?style=for-the-badge" alt="平台" /></a>
-<a href="LICENSE"><img src="https://img.shields.io/badge/许可-MIT-6D4AD8?style=for-the-badge" alt="许可" /></a>
+<a href="#项目结构"><img src="https://img.shields.io/badge/依赖-零%20AndroidX-23272E?style=for-the-badge" alt="依赖" /></a>
 </p>
 
 <p>
@@ -52,9 +52,7 @@
 ## 截图
 
 <div align="center">
-<img src="assets/screens/home.png" width="30%" alt="首页" />
-<img src="assets/screens/log.png" width="30%" alt="日志" />
-<img src="assets/screens/settings.png" width="30%" alt="设置" />
+<img src="shots/hamqso.png" width="100%" alt="应用截图" />
 </div>
 
 ## 快速开始
