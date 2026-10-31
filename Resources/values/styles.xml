@@ -24,6 +24,13 @@
   </style>
 
   <style name="SheetTheme" parent="SheetTheme.Base" />
+
+  <!-- 底部弹层类窗口动画：进场自下而上，退场自上而下（不会反着飞） -->
+  <style name="SheetDialogAnim">
+    <item name="android:windowEnterAnimation">@anim/sheet_in</item>
+    <item name="android:windowExitAnimation">@anim/sheet_out</item>
+  </style>
+
   <style name="AppDialogTheme" parent="@android:style/Theme.Material.Light.Dialog.Alert">
     <item name="android:windowBackground">@drawable/dialog_bg</item>
     <item name="android:windowIsFloating">true</item>

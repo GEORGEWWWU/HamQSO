@@ -9,18 +9,122 @@ using HamJi.Core;
 
 namespace HamJi.Views
 {
-    /// <summary>底部弹出的选择器基类：Dialog 默认窗口是浮动的窄窗，
-    /// 必须在 Show 之后强制铺满宽度，否则会缩在屏幕中间。</summary>
+    /// <summary>
+    /// 底部弹出的选择器基类：
+    /// 1) Dialog 默认是浮动窄窗，Show 之后必须强制铺满宽度；
+    /// 2) 关闭时必须是「往下滑走」，所以统一走 windowExitAnimation；
+    /// 3) 支持从卡片上向下拖动关闭（带阻尼与回弹），向上拖动只给阻尼、不关闭。
+    /// </summary>
     public abstract class BottomSheetDialog : Dialog
     {
-        protected BottomSheetDialog(Context c) : base(c) { }
+        protected LinearLayout Card;
+
+        private float _downRawY, _lastRawY, _vel;
+        private long _lastT;
+        private bool _dragging;
+        private bool _dragAllowed;
+        private int _slop;
+
+        protected BottomSheetDialog(Context c) : base(c)
+        {
+            _slop = Dui.Dp(6);
+        }
+
+        internal void AttachCard(LinearLayout card) { Card = card; }
 
         public override void Show()
         {
             base.Show();
-            try { Window?.SetLayout(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent); }
+            try
+            {
+                var win = Window;
+                if (win != null)
+                {
+                    win.SetLayout(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
+                    win.SetWindowAnimations(Resource.Style.SheetDialogAnim);
+                }
+            }
             catch { }
         }
+
+        internal bool DragIntercept(MotionEvent e)
+        {
+            switch (e.ActionMasked)
+            {
+                case MotionEventActions.Down:
+                    _downRawY = e.RawY;
+                    _lastRawY = _downRawY;
+                    _lastT = e.EventTime;
+                    _vel = 0;
+                    _dragging = false;
+                    // 只有从顶部把手/标题区域起手才算拖拽，否则会把时/分列表的滚动抢走
+                    _dragAllowed = e.GetY() <= Dui.Dp(96);
+                    return false;
+                case MotionEventActions.Move:
+                    if (!_dragAllowed) return false;
+                    if (!_dragging && e.RawY - _downRawY > _slop) _dragging = true;
+                    return _dragging;
+            }
+            return false;
+        }
+
+        internal bool DragTouch(MotionEvent e)
+        {
+            if (Card == null) return false;
+            switch (e.ActionMasked)
+            {
+                case MotionEventActions.Down:
+                    return true;
+
+                case MotionEventActions.Move:
+                    float dy = e.RawY - _downRawY;
+                    if (dy < 0) dy *= 0.22f;          // 向上拖只给阻尼，不跟手
+                    Card.TranslationY = dy;
+                    long dt = e.EventTime - _lastT;
+                    if (dt > 0) _vel = (e.RawY - _lastRawY) * 1000f / dt;
+                    _lastRawY = e.RawY;
+                    _lastT = e.EventTime;
+                    return true;
+
+                case MotionEventActions.Up:
+                case MotionEventActions.Cancel:
+                    bool shouldClose = Card.TranslationY > Card.Height * 0.28f || _vel > Dui.Dpf(900);
+                    if (shouldClose)
+                    {
+                        Dismiss();
+                    }
+                    else
+                    {
+                        Card.Animate().TranslationY(0f).SetDuration(220)
+                            .SetInterpolator(new Android.Views.Animations.DecelerateInterpolator(1.6f)).Start();
+                    }
+                    _dragging = false;
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>拖动后卡片已经偏移，关闭动画要从当前位置继续往下滑。</summary>
+        public override void Dismiss()
+        {
+            base.Dismiss();
+        }
+    }
+
+    /// <summary>可以整卡拖动关闭的容器：竖向手势超过阈值就拦截，点击仍然给子 View。</summary>
+    internal sealed class DragCard : LinearLayout
+    {
+        private readonly BottomSheetDialog _owner;
+
+        public DragCard(Context c, BottomSheetDialog owner) : base(c)
+        {
+            _owner = owner;
+            Orientation = Orientation.Vertical;
+        }
+
+        public override bool OnInterceptTouchEvent(MotionEvent e) => _owner.DragIntercept(e);
+
+        public override bool OnTouchEvent(MotionEvent e) => _owner.DragTouch(e);
     }
 
     /// <summary>底部弹出的选择器外壳：圆角卡片 + 把手 + 标题 + 关闭按钮。</summary>
@@ -32,6 +136,12 @@ namespace HamJi.Views
             win.SetBackgroundDrawable(new ColorDrawable(Color.Transparent));
             win.AddFlags(WindowManagerFlags.DimBehind);
             win.SetDimAmount(0.45f);
+            // 让窗口一直铺到屏幕底部（包括手势条区域），否则卡片下方会露出一条没有背景的缝
+            win.SetFlags(WindowManagerFlags.LayoutNoLimits, WindowManagerFlags.LayoutNoLimits);
+            if ((int)Android.OS.Build.VERSION.SdkInt >= 30)
+            {
+                try { win.SetDecorFitsSystemWindows(false); } catch { }
+            }
             var lp = win.Attributes;
             lp.Gravity = GravityFlags.Bottom;
             lp.Width = ViewGroup.LayoutParams.MatchParent;
@@ -39,12 +149,19 @@ namespace HamJi.Views
             win.Attributes = lp;
             dlg.SetCanceledOnTouchOutside(true);
 
-            var card = Dui.VBox();
+            var sheet = dlg as BottomSheetDialog;
+            LinearLayout card = sheet != null ? new DragCard(dlg.Context, sheet) : Dui.VBox();
             var bg = new GradientDrawable();
             bg.SetColor(new Color(Dui.SheetBg));
             bg.SetCornerRadii(new[] { Dui.Dpf(24), Dui.Dpf(24), Dui.Dpf(24), Dui.Dpf(24), 0f, 0f, 0f, 0f });
             card.SetBackgroundDrawable(bg);
             card.SetPadding(Dui.Dp(18), Dui.Dp(10), Dui.Dp(18), Dui.Dp(14));
+            if (sheet != null) sheet.AttachCard(card);
+
+            // 手势条高度自己补到卡片内边距里，卡片背景就能一直填到屏幕底
+            var insets = new BottomPad(card, Dui.Dp(14));
+            card.SetOnApplyWindowInsetsListener(insets);
+            card.RequestApplyInsets();
 
             // 把手
             var handleBox = new FrameLayout(dlg.Context);
@@ -66,6 +183,29 @@ namespace HamJi.Views
 
             dlg.SetContentView(card);
             return card;
+        }
+
+        /// <summary>把底部系统栏高度并进卡片内边距，避免手势条压在内容上或背景断开。</summary>
+        private sealed class BottomPad : Java.Lang.Object, View.IOnApplyWindowInsetsListener
+        {
+            private readonly View _v;
+            private readonly int _base;
+            public BottomPad(View v, int baseBottom) { _v = v; _base = baseBottom; }
+
+            public WindowInsets OnApplyWindowInsets(View view, WindowInsets insets)
+            {
+                int nav = 0;
+                try
+                {
+                    if ((int)Android.OS.Build.VERSION.SdkInt >= 30) nav = insets.GetInsets(7).Bottom;
+#pragma warning disable CS0618
+                    else nav = insets.SystemWindowInsetBottom;
+#pragma warning restore CS0618
+                }
+                catch { }
+                _v.SetPadding(Dui.Dp(18), Dui.Dp(10), Dui.Dp(18), _base + Math.Max(0, nav));
+                return insets;
+            }
         }
 
         public static TextView Chip(string text)

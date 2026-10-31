@@ -4,7 +4,7 @@
   <shortcut
       android:shortcutId="new_freq"
       android:enabled="true"
-      android:icon="@drawable/ic_freq"
+      android:icon="@drawable/ic_shortcut_freq"
       android:shortcutShortLabel="@string/shortcut_freq_short"
       android:shortcutLongLabel="@string/shortcut_freq_long">
     <intent
@@ -18,7 +18,7 @@
   <shortcut
       android:shortcutId="new_log"
       android:enabled="true"
-      android:icon="@drawable/ic_log"
+      android:icon="@drawable/ic_shortcut_log"
       android:shortcutShortLabel="@string/shortcut_log_short"
       android:shortcutLongLabel="@string/shortcut_log_long">
     <intent
