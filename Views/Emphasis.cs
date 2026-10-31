@@ -109,11 +109,10 @@ namespace HamJi.Views
 
         private bool _buildQueued;
 
+        /// <summary>重新生成模糊底图；旧图保留到新图就绪，避免滚动时闪一下。</summary>
         public void RefreshBlur()
         {
-            _thumb = null;
             QueueBuild();
-            Invalidate();
         }
 
         private void QueueBuild()
@@ -136,8 +135,8 @@ namespace HamJi.Views
                 const float scale = 0.11f;
                 int tw = Math.Max(4, (int)(Backdrop.Width * scale));
                 int th = Math.Max(4, (int)(Backdrop.Height * scale));
-                _thumb = Bitmap.CreateBitmap(tw, th, Bitmap.Config.Argb8888);
-                var canvas = new Canvas(_thumb);
+                var bmp = Bitmap.CreateBitmap(tw, th, Bitmap.Config.Argb8888);
+                var canvas = new Canvas(bmp);
                 canvas.Scale(scale, scale);
 
                 Backdrop.Draw(canvas);
@@ -157,7 +156,7 @@ namespace HamJi.Views
                     catch { }
                 }
 
-                ImgBlur.Box(_thumb, 5);
+                ImgBlur.Box(bmp, 5);
 
                 var locA = new int[2];
                 var locS = new int[2];
@@ -165,13 +164,17 @@ namespace HamJi.Views
                 GetLocationInWindow(locS);
                 int ox = locS[0] - locA[0];
                 int oy = locS[1] - locA[1];
-                _src = new Rect();
-                _src.Set((int)(ox * scale), (int)(oy * scale), (int)((ox + Width) * scale), (int)((oy + Height) * scale));
-                _src.Intersect(0, 0, tw, th);
+                var src = new Rect();
+                src.Set((int)(ox * scale), (int)(oy * scale), (int)((ox + Width) * scale), (int)((oy + Height) * scale));
+                src.Intersect(0, 0, tw, th);
+
+                // 原子替换：新图就绪后才切换，中间不会出现"只有底色"的一帧
+                _thumb = bmp;
+                _src = src;
             }
             catch
             {
-                _thumb = null;
+                // 保留旧底图，宁可略旧也不要闪一帧空白
             }
         }
 

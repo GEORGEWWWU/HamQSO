@@ -34,7 +34,7 @@ namespace HamJi.Views
         {
             var row = Dui.HBox();
             row.LayoutParameters = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
-            row.SetPadding(Dui.Dp(10), Dui.Dp(18), Dui.Dp(10), Dui.Dp(9));
+            row.SetPadding(Dui.Dp(8), Dui.Dp(14), Dui.Dp(8), Dui.Dp(7));
 
             var left = Dui.Label(day, 12.5f, Dui.TextSecondary, true);
             left.LetterSpacing = 0.06f;
@@ -60,9 +60,9 @@ namespace HamJi.Views
             card.SetBackgroundDrawable(Dui.GlassCard());
             card.ClipToOutline = true;
             card.OutlineProvider = ViewOutlineProvider.Background;
-            card.Elevation = Dui.Dpf(3);
+            card.Elevation = Dui.Dpf(2);
             var lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
-            lp.BottomMargin = Dui.Dp(14);
+            lp.BottomMargin = Dui.Dp(8);
             card.LayoutParameters = lp;
             return card;
         }

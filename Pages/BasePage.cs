@@ -21,7 +21,6 @@ namespace HamJi.Pages
         protected BasePage(Context c) : base(c)
         {
             Orientation = Orientation.Vertical;
-            SetClipChildren(false);
 
             Header = Dui.VBox();
             TitleView = Dui.Label("", 27f, Dui.TextPrimary, true);
@@ -78,15 +77,12 @@ namespace HamJi.Pages
 
                 ListHost.AddView(Widgets.DayHeader(label, extra, g.Count()));
 
-                var card = Widgets.Card();
-                bool first = true;
                 foreach (var rec in g)
                 {
-                    if (!first) card.AddView(Widgets.Divider());
+                    var card = Widgets.Card();
                     card.AddView(rowFactory(rec));
-                    first = false;
+                    ListHost.AddView(card);
                 }
-                ListHost.AddView(card);
             }
         }
 

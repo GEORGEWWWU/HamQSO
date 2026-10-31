@@ -163,12 +163,25 @@ namespace HamJi.Views
         {
             index = Math.Max(0, Math.Min(2, index));
             bool changed = index != _current;
+            int old = _current;
             _current = index;
             foreach (var it in _items) it.SetSelected(it.Index == index, animate);
             _spring.Sync(_indicator.TranslationX);
             if (animate) _spring.To(XOf(index));
             else { _spring.Stop(); _indicator.TranslationX = XOf(index); }
-            if (changed) Selected?.Invoke(index);
+            if (changed)
+            {
+                // 轻点切换：朝移动方向先拉长再弹回，做出"水滴被甩过去"的味道
+                if (animate)
+                {
+                    _indicator.Animate().Cancel();
+                    _indicator.PivotX = index > old ? _indicator.Width : 0f;
+                    _indicator.ScaleX = 1.16f;
+                    _indicator.Animate().ScaleX(1f).SetDuration(460)
+                        .SetInterpolator(new OvershootInterpolator(3.2f)).Start();
+                }
+                Selected?.Invoke(index);
+            }
         }
 
         private int IndexFromDrag(float velocity)
@@ -202,7 +215,10 @@ namespace HamJi.Views
                     _vel = 0;
                     _downIndex = IndexAt(_downX);
                     _spring.Stop();
-                    _indicator.Animate().ScaleX(1.07f).ScaleY(1.07f).SetDuration(130)
+                    _indicator.Animate().Cancel();
+                    _indicator.PivotX = _indicator.Width / 2f;
+                    _indicator.ScaleX = 1f;
+                    _indicator.Animate().ScaleY(1.07f).SetDuration(130)
                         .SetInterpolator(new DecelerateInterpolator()).Start();
                     return true;
 
@@ -220,6 +236,11 @@ namespace HamJi.Views
                         if (dt > 0) _vel = (e.GetX() - _lastX) * 1000f / dt;
                         _lastX = e.GetX();
                         _lastT = e.EventTime;
+
+                        // 果冻：速度越快横向拉得越长，方向跟随移动方向
+                        float stretch = 1f + Math.Min(0.45f, Math.Abs(_vel) / Dui.Dpf(2200f));
+                        _indicator.PivotX = _vel >= 0 ? _indicator.Width : 0f;
+                        _indicator.ScaleX = stretch;
                     }
                     return true;
 
@@ -227,8 +248,9 @@ namespace HamJi.Views
                 case MotionEventActions.Cancel:
                     if (!_dragging) return true;
                     _dragging = false;
-                    _indicator.Animate().ScaleX(1f).ScaleY(1f).SetDuration(180)
-                        .SetInterpolator(new OvershootInterpolator(1.4f)).Start();
+                    _indicator.Animate().Cancel();
+                    _indicator.Animate().ScaleX(1f).ScaleY(1f).SetDuration(420)
+                        .SetInterpolator(new OvershootInterpolator(2.8f)).Start();
                     int target = _moved ? IndexFromDrag(_vel) : _downIndex;
                     Settle(target, true);
                     return true;

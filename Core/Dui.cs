@@ -115,7 +115,7 @@ namespace HamJi.Core
         {
             var d = new GradientDrawable(GradientDrawable.Orientation.TopBottom,
                 new[] { Mix(CardBg, Color.White, Dark ? 0.05f : 0.32f), CardBg });
-            d.SetCornerRadius(Dpf(22));
+            d.SetCornerRadius(Dpf(16));
             d.SetStroke(Math.Max(1, Dp(1)), new Color(CardBorder));
             return d;
         }

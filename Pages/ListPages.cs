@@ -28,7 +28,7 @@ namespace HamJi.Pages
         private View Row(QsoRecord rec)
         {
             var row = Dui.VBox();
-            row.SetPadding(Dui.Dp(16), Dui.Dp(13), Dui.Dp(16), Dui.Dp(13));
+            row.SetPadding(Dui.Dp(14), Dui.Dp(10), Dui.Dp(14), Dui.Dp(10));
             row.Clickable = true;
             row.Focusable = true;
             row.SetBackgroundDrawable(Widgets.RowRipple(18));
@@ -52,7 +52,7 @@ namespace HamJi.Pages
 
             var l2 = Dui.HBox();
             var lp2 = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent)
-            { TopMargin = Dui.Dp(7) };
+            { TopMargin = Dui.Dp(5) };
             l2.LayoutParameters = lp2;
 
             if (!string.IsNullOrWhiteSpace(rec.Mode))
@@ -97,7 +97,7 @@ namespace HamJi.Pages
         private View Row(QsoRecord rec)
         {
             var row = Dui.VBox();
-            row.SetPadding(Dui.Dp(16), Dui.Dp(13), Dui.Dp(16), Dui.Dp(13));
+            row.SetPadding(Dui.Dp(14), Dui.Dp(10), Dui.Dp(14), Dui.Dp(10));
             row.Clickable = true;
             row.Focusable = true;
             row.SetBackgroundDrawable(Widgets.RowRipple(18));
@@ -127,7 +127,7 @@ namespace HamJi.Pages
             ml.SetSingleLine(true);
             ml.Ellipsize = TextUtils.TruncateAt.End;
             var mlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent)
-            { TopMargin = Dui.Dp(6) };
+            { TopMargin = Dui.Dp(4) };
             row.AddView(ml, mlp);
 
             if (!string.IsNullOrWhiteSpace(rec.Notes))
