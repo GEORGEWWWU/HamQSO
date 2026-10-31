@@ -127,9 +127,19 @@ namespace HamJi.Core
 
         private static string FirstApk(string s)
         {
-            int i = s.IndexOf("\"browser_download_url\"", StringComparison.Ordinal);
-            if (i < 0) return "";
-            return Json(s.Substring(i), "browser_download_url");
+            // 优先找 .apk 结尾的下载地址，避免拿到源码包之类的资产
+            int i = 0;
+            while (true)
+            {
+                int k = s.IndexOf("\"browser_download_url\"", i, StringComparison.Ordinal);
+                if (k < 0) break;
+                var u = Json(s.Substring(k), "browser_download_url");
+                if (!string.IsNullOrEmpty(u) && u.EndsWith(".apk", StringComparison.OrdinalIgnoreCase)) return u;
+                i = k + 1;
+            }
+            int first = s.IndexOf("\"browser_download_url\"", StringComparison.Ordinal);
+            if (first < 0) return "";
+            return Json(s.Substring(first), "browser_download_url");
         }
 
         public static string AppVersion()
@@ -205,22 +215,34 @@ namespace HamJi.Core
 
         public static void ShowUpdate(Context c, Result r)
         {
-            try
+            // 优先用 App 内的自绘弹窗（可原地下载 + 进度），拿不到 Activity 时退回浏览器
+            if (c is Activity act)
             {
-                string title = "发现新版本 " + r.Tag;
-                string msg = string.IsNullOrWhiteSpace(r.Notes) ? "是否前往下载？" : r.Notes.Trim();
-                if (msg.Length > 400) msg = msg.Substring(0, 400) + "…";
-
-                var b = new AlertDialog.Builder(c, Resource.Style.AppDialogTheme)
-                    .SetTitle(title)
-                    .SetMessage(msg)
-                    .SetPositiveButton("立即更新", (s, e) => Open(c, r.Url))
-                    .SetNegativeButton("以后再说", (s, e) => { });
-                if (!string.IsNullOrEmpty(r.Tag)) b.SetNeutralButton("忽略此版本", (s, e) => SetSkip(c, r.Tag));
-                var dlg = b.Create();
-                dlg.Show();
+                try
+                {
+                    if (!act.IsFinishing)
+                    {
+                        new HamJi.Views.UpdateDialog(act, r).Show();
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Android.Util.Log.Info("HamJiUpd", "dialog fail: " + ex.Message);
+                }
             }
-            catch { Open(c, r.Url); }
+            Open(c, r.Url);
+        }
+
+        /// <summary>不再提示这个版本（直到出现更新的 tag 才会再提醒）。</summary>
+        public static void SkipVersion(Context c, string tag)
+        {
+            if (!string.IsNullOrEmpty(tag)) SetSkip(c, tag);
+        }
+
+        public static void OpenRelease(Context c, string url)
+        {
+            Open(c, string.IsNullOrEmpty(url) ? ReleasesUrl : url);
         }
 
         private static void Open(Context c, string url)
