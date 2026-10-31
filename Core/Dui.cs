@@ -59,6 +59,23 @@ namespace HamJi.Core
             IconBg = Clr(r, Resource.Color.icon_bg);
         }
 
+        /// <summary>按主题色重算强调色系（纯色，无渐变）。</summary>
+        public static void ApplyAccent(int accent, int fill)
+        {
+            // 强制不透明，避免 24 位色值被当成 alpha=0
+            accent = Color.Argb(255, Color.GetRedComponent(accent), Color.GetGreenComponent(accent), Color.GetBlueComponent(accent));
+            Accent = accent;
+            AccentDeep = Mix(accent, Color.Black, 0.22f);
+            AccentSoft = WithAlpha(accent, Dark ? 58 : 32);
+            // 填充色（按钮/滑块）单独给：深色模式下用更实的颜色，保证白字可读
+            AccentFill = Color.Argb(255, Color.GetRedComponent(fill), Color.GetGreenComponent(fill), Color.GetBlueComponent(fill));
+            AccentFill2 = AccentFill;
+            AccentText = Color.White;
+            ChipBg = WithAlpha(accent, Dark ? 40 : 24);
+            NavIconOn = accent;
+            IconBg = accent;
+        }
+
         private static int Clr(Resources r, int id)
         {
 #pragma warning disable CS0618

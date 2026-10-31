@@ -13,6 +13,7 @@ namespace HamJi.Pages
     public class SettingsPage : BasePage
     {
         public const int ReqExport = 0x51A1;
+        private PopupWindow _themePop;
         public event Action<int> Navigate;
 
         public SettingsPage(Context c) : base(c) { }
@@ -62,7 +63,11 @@ namespace HamJi.Pages
             // 关于
             var card2 = Widgets.Card();
             card2.AddView(Row(Resource.Drawable.ic_info, "版本", AppInfo.VersionName, null));
-            card2.AddView(Row(Resource.Drawable.ic_settings, "主题", Dui.Dark ? "深色 · 跟随系统" : "浅色 · 跟随系统", null));
+
+            var themeRow = Widgets.SettingRow(Resource.Drawable.ic_settings, "主题色",
+                AppTheme.Names[AppTheme.Current], false, true, AppTheme.Swatch(AppTheme.Current));
+            themeRow.Click += (s2, e2) => ShowThemeMenu(themeRow);
+            card2.AddView(themeRow);
             card2.AddView(Row(Resource.Drawable.ic_clock, "数据存储", "仅本机", null));
             card2.AddView(Row(Resource.Drawable.ic_export, "源码仓库", "GitHub", OpenRepo));
             ListHost.AddView(card2);
@@ -80,6 +85,67 @@ namespace HamJi.Pages
             var row = Widgets.SettingRow(icon, title, value, danger, onClick != null);
             if (onClick != null) row.Click += (s2, e2) => onClick();
             return row;
+        }
+
+        private void ShowThemeMenu(View anchor)
+        {
+            var list = Dui.VBox();
+            list.SetPadding(Dui.Dp(6), Dui.Dp(6), Dui.Dp(6), Dui.Dp(6));
+
+            for (int i = 0; i < AppTheme.Names.Length; i++)
+            {
+                int idx = i;
+                var row = Dui.HBox();
+                row.SetPadding(Dui.Dp(12), 0, Dui.Dp(10), 0);
+                row.Clickable = true;
+
+                var dot = new View(Context);
+                dot.SetBackgroundDrawable(Dui.Round(AppTheme.Swatch(i), 8));
+                row.AddView(dot, new LinearLayout.LayoutParams(Dui.Dp(16), Dui.Dp(16)));
+
+                var tv = Dui.Label(AppTheme.Names[i], 14f, Dui.TextPrimary, i == AppTheme.Current);
+                row.AddView(tv, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f) { LeftMargin = Dui.Dp(10) });
+
+                if (i == AppTheme.Current)
+                {
+                    var chk = Dui.Icon(Resource.Drawable.ic_check, 16, Dui.Accent);
+                    row.AddView(chk, new LinearLayout.LayoutParams(Dui.Dp(16), Dui.Dp(16)));
+                }
+
+                row.Click += (s2, e2) =>
+                {
+                    _themePop?.Dismiss();
+                    if (idx == AppTheme.Current) return;
+                    AppTheme.Set(Context, idx);
+                    if (Context is Activity act) act.Recreate();
+                };
+                list.AddView(row, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, Dui.Dp(42)));
+            }
+
+            var sv = new MaxHeightScrollView(Context) { MaxRatio = 1f };
+            sv.VerticalScrollBarEnabled = false;
+            sv.AddView(list, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent));
+
+            var w = anchor.Width > 0 ? anchor.Width : Dui.Dp(240);
+            int screenH = Resources.DisplayMetrics.HeightPixels;
+            var loc = new int[2];
+            anchor.GetLocationOnScreen(loc);
+
+            int want = Dui.Dp(42) * AppTheme.Names.Length + Dui.Dp(12);
+            int below = screenH - (loc[1] + anchor.Height) - Dui.Dp(20);
+            int above = loc[1] - Dui.Dp(20);
+
+            bool up = below < want && above > below;
+            int h = Math.Max(Dui.Dp(120), Math.Min(want, up ? above : below));
+
+            _themePop = new PopupWindow(sv, w, h);
+            _themePop.SetBackgroundDrawable(Dui.Round(Dui.SheetBg, 16));
+            _themePop.OutsideTouchable = true;
+            _themePop.Focusable = true;
+            _themePop.Elevation = Dui.Dpf(12);
+
+            if (up) _themePop.ShowAtLocation(anchor, GravityFlags.NoGravity, loc[0], loc[1] - h - Dui.Dp(6));
+            else _themePop.ShowAsDropDown(anchor, 0, Dui.Dp(4));
         }
 
         private const string RepoUrl = "https://github.com/GEORGEWWWU/HamQSO";

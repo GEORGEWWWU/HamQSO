@@ -100,25 +100,31 @@ namespace HamJi.Views
         }
 
         /// <summary>设置页列表项：图标 + 标题 + 右侧值/箭头。</summary>
-        public static LinearLayout SettingRow(int iconRes, string title, string value, bool danger = false, bool chevron = true)
+        public static LinearLayout SettingRow(int iconRes, string title, string value, bool danger = false, bool chevron = true, int dotColor = 0)
         {
             var row = Dui.HBox();
             row.LayoutParameters = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
-            row.SetPadding(Dui.Dp(14), Dui.Dp(11), Dui.Dp(12), Dui.Dp(11));
+            row.SetPadding(Dui.Dp(16), Dui.Dp(12), Dui.Dp(14), Dui.Dp(12));
             row.Clickable = true;
             row.Focusable = true;
             HamJi.Core.Touch.Press(row, 0.985f);
 
             int fg = danger ? Dui.Danger : Dui.TextPrimary;
-            var bubble = new FrameLayout(Dui.Ctx);
-            bubble.SetBackgroundDrawable(Dui.Round(danger ? Dui.WithAlpha(Dui.Danger, 26) : Dui.AccentSoft, 10));
-            var ic = Dui.Icon(iconRes, 17, danger ? Dui.Danger : Dui.Accent);
-            bubble.AddView(ic, new FrameLayout.LayoutParams(Dui.Dp(17), Dui.Dp(17)) { Gravity = GravityFlags.Center });
-            row.AddView(bubble, new LinearLayout.LayoutParams(Dui.Dp(30), Dui.Dp(30)));
 
-            var tv = Dui.Label(title, 14f, fg, false);
-            var tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f) { LeftMargin = Dui.Dp(10) };
+            // 图标不再带底色块，直接放大一点，和标题贴近
+            var ic = Dui.Icon(iconRes, 21, danger ? Dui.Danger : Dui.Accent);
+            row.AddView(ic, new LinearLayout.LayoutParams(Dui.Dp(21), Dui.Dp(21)));
+
+            var tv = Dui.Label(title, 14.5f, fg, false);
+            var tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f) { LeftMargin = Dui.Dp(9) };
             row.AddView(tv, tlp);
+
+            if (dotColor != 0)
+            {
+                var dot = new View(Dui.Ctx);
+                dot.SetBackgroundDrawable(Dui.Round(dotColor, 5));
+                row.AddView(dot, new LinearLayout.LayoutParams(Dui.Dp(10), Dui.Dp(10)) { RightMargin = Dui.Dp(7) });
+            }
 
             if (!string.IsNullOrEmpty(value))
             {

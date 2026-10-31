@@ -81,10 +81,16 @@ namespace HamJi.Pages
             }
         }
 
-        /// <summary>「共 N 条 · 最后更新于 yyyy年M月d日」。</summary>
+        /// <summary>「共 N 条 · 最后更新于今天/昨天/yyyy年M月d日」。</summary>
         protected string UpdatedLine(int count, string unit)
         {
-            return "共 " + count + " " + unit + " · 最后更新于 " + Store.LastUpdated.ToString("yyyy年M月d日");
+            var day = Store.LastUpdated.Date;
+            var today = DateTime.Today;
+            string when = day == today ? "今天"
+                : day == today.AddDays(-1) ? "昨天"
+                : day.Year == today.Year ? day.ToString("M月d日")
+                : day.ToString("yyyy年M月d日");
+            return "共 " + count + " " + unit + " · 最后更新于" + when;
         }
 
         protected void RenderGrouped(List<QsoRecord> items, Func<QsoRecord, View> rowFactory,

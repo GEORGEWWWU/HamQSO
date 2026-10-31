@@ -60,7 +60,9 @@ namespace HamJi
         protected override void OnCreate(Bundle savedInstanceState)
         {
             base.OnCreate(savedInstanceState);
+            AppTheme.Load(this);
             Dui.Init(this);
+            AppTheme.Apply();
             Window.SetSoftInputMode(SoftInput.AdjustResize);
             Window.SetStatusBarColor(Color.Transparent);
             Window.SetNavigationBarColor(Color.Transparent);
@@ -90,6 +92,10 @@ namespace HamJi
             bg.SetCornerRadii(new[] { Dui.Dpf(26), Dui.Dpf(26), Dui.Dpf(26), Dui.Dpf(26), 0f, 0f, 0f, 0f });
             _sheet.SetBackgroundDrawable(bg);
             _sheet.Elevation = Dui.Dpf(24);
+            // 吃掉落在弹层空白处的点击，否则会穿透到 scrim 把弹层关掉
+            _sheet.Clickable = true;
+            // 首帧先隐藏，等 Post 里摆好位置再淡入，避免"闪一下又消失"
+            _sheet.Alpha = 0f;
 
             // ---- 可拖拽区：指示条 + 标题栏 ----
             var dragArea = Dui.VBox();
@@ -196,6 +202,7 @@ namespace HamJi
                 int natural = NaturalHeight();
                 if (natural > 0) _fitH = natural;
                 _sheet.TranslationY = _sheet.Height;
+                _sheet.Alpha = 1f;
                 _sheet.Animate().TranslationY(0f).SetDuration(300).SetInterpolator(new DecelerateInterpolator(1.5f)).Start();
                 _scrim.Animate().Alpha(1f).SetDuration(220).Start();
             });
@@ -226,20 +233,30 @@ namespace HamJi
 
             _kind = (RecKind)r.Kind;
             if (r.IsLog) _seg.Select(1); else BuildForm();
+            _seg.Lock((int)_kind);   // 编辑已有记录时不允许改类型
             RefreshTimeText();
         }
 
         private void CreateInputs()
         {
             _freq = Input("145.500", InputTypes.ClassNumber | InputTypes.NumberFlagDecimal, false, 48);
+            _freq.SetFilters(Filters.Freq());
             _notes = Input("通联内容、天气、天线方向……", InputTypes.ClassText | InputTypes.TextFlagMultiLine, true);
+            _notes.SetFilters(Filters.Length(200));
             _call = Input("例如 BG7XXX", InputTypes.ClassText | InputTypes.TextFlagCapCharacters);
+            _call.SetFilters(Filters.CallSign());
             _rstTx = Input("发 59", InputTypes.ClassText);
+            _rstTx.SetFilters(Filters.Rst());
             _rstRx = Input("收 59", InputTypes.ClassText);
+            _rstRx.SetFilters(Filters.Rst());
             _qth = Input("对方位置", InputTypes.ClassText);
+            _qth.SetFilters(Filters.Length(40));
             _rig = Input("设备型号", InputTypes.ClassText);
+            _rig.SetFilters(Filters.Length(40));
             _power = Input("功率 W", InputTypes.ClassNumber | InputTypes.NumberFlagDecimal);
+            _power.SetFilters(Filters.Decimal(6));
             _ant = Input("天线 / 频段", InputTypes.ClassText);
+            _ant.SetFilters(Filters.Length(40));
 
             if (_editing != null && !string.IsNullOrWhiteSpace(_editing.Mode)
                 && Array.IndexOf(ModeNames, _editing.Mode) < 0)
@@ -762,9 +779,23 @@ namespace HamJi
             Paint(0, false);
         }
 
+        private bool _locked;
+
+        /// <summary>锁定到某个选项（编辑已有记录时不允许改类型），另一侧置灰不可点。</summary>
+        public void Lock(int idx)
+        {
+            _locked = true;
+            _sel = Math.Max(0, Math.Min(_items.Length - 1, idx));
+            for (int i = 0; i < _items.Length; i++)
+            {
+                _items[i].Clickable = false;
+                Paint(i, false);
+            }
+        }
+
         public void Select(int idx)
         {
-            if (idx == _sel) return;
+            if (_locked || idx == _sel) return;
             int old = _sel;
             _sel = idx;
             Paint(old, true);
@@ -788,7 +819,7 @@ namespace HamJi
             else
             {
                 tv.SetBackgroundDrawable(null);
-                tv.SetTextColor(new Color(Dui.TextSecondary));
+                tv.SetTextColor(new Color(_locked ? Dui.WithAlpha(Dui.TextTertiary, 120) : Dui.TextSecondary));
                 tv.SetTypeface(Dui.Regular, TypefaceStyle.Normal);
                 tv.Elevation = 0;
             }
@@ -820,12 +851,12 @@ namespace HamJi
             _names = names;
             Clickable = true;
             SetBackgroundDrawable(Dui.InputFieldBg());
-            SetPadding(Dui.Dp(12), 0, Dui.Dp(10), 0);
+            SetPadding(Dui.Dp(14), 0, Dui.Dp(28), 0);
 
             _label = Dui.Label("", 15f, Dui.TextPrimary, false);
-            _label.Gravity = GravityFlags.Center;
+            _label.Gravity = GravityFlags.CenterVertical | GravityFlags.Start;
             AddView(_label, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent)
-            { Gravity = GravityFlags.Center });
+            { Gravity = GravityFlags.Start | GravityFlags.CenterVertical });
 
             var chev = Dui.Icon(Resource.Drawable.ic_chevron, 16, Dui.TextTertiary);
             chev.Rotation = 90f;

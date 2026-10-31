@@ -42,7 +42,9 @@ namespace HamJi
         protected override void OnCreate(Bundle savedInstanceState)
         {
             base.OnCreate(savedInstanceState);
+            AppTheme.Load(this);
             Dui.Init(this);
+            AppTheme.Apply();
             Crash.Install(this);
             try
             {
@@ -321,6 +323,7 @@ namespace HamJi
             try
             {
                 Dui.Init(this);
+                AppTheme.Apply();
                 ApplyBarIcons();
                 _currentPage?.Refresh();
             }
