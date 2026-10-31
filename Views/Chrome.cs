@@ -354,7 +354,7 @@ namespace HamJi.Views
             Clickable = true;
             Focusable = true;
 
-            var bg = Dui.Stroke(Dui.WithAlpha(Dui.CardBg, 235), 23, Dui.CardBorder, 1);
+            var bg = Dui.Round(Dui.WithAlpha(Dui.CardBg, 235), 23);
             Background = Dui.Ripple(Dui.WithAlpha(Dui.Accent, 40), bg);
             ClipToOutline = true;
             OutlineProvider = ViewOutlineProvider.Background;

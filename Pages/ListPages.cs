@@ -72,8 +72,6 @@ namespace HamJi.Pages
             row.AddView(l2);
 
             row.Click += (s, e) => ShowDetail(rec);
-            row.LongClick += (s, e) => { ConfirmDelete(rec); e.Handled = true; };
-            row.LongClickable = true;
             return row;
         }
     }
@@ -141,8 +139,6 @@ namespace HamJi.Pages
             }
 
             row.Click += (s, e) => ShowDetail(rec);
-            row.LongClick += (s, e) => { ConfirmDelete(rec); e.Handled = true; };
-            row.LongClickable = true;
             return row;
         }
     }

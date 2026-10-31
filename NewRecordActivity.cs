@@ -38,6 +38,7 @@ namespace HamJi
         private Segmented _seg;
         private View _dragArea;
         private LinearLayout _saveWrap;
+        private View _fade;
 
         private EditText _freq, _notes, _call, _rstTx, _rstRx, _qth, _rig, _power, _ant;
         private TextView _dateBtn, _timeBtn;
@@ -137,7 +138,18 @@ namespace HamJi
             _form = Dui.VBox();
             _form.SetPadding(Dui.Dp(22), Dui.Dp(16), Dui.Dp(22), Dui.Dp(10));
             _scroll.AddView(_form, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent));
-            _sheet.AddView(_scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, 0, 1f));
+
+            // 滚动区外面套一层，用于放置顶部渐隐遮罩（避免内容被硬切）
+            var scrollWrap = new FrameLayout(this);
+            scrollWrap.AddView(_scroll, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent));
+            _fade = new View(this);
+            _fade.SetBackgroundDrawable(new GradientDrawable(GradientDrawable.Orientation.TopBottom,
+                new[] { new Color(Dui.SheetBg), Dui.WithAlpha(Dui.SheetBg, 0) }));
+            _fade.Clickable = false;
+            _fade.Focusable = false;
+            scrollWrap.AddView(_fade, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, Dui.Dp(18))
+            { Gravity = GravityFlags.Top });
+            _sheet.AddView(scrollWrap, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, 0, 1f));
 
             CreateInputs();
 
@@ -180,7 +192,7 @@ namespace HamJi
 
         private void CreateInputs()
         {
-            _freq = Input("145.500", InputTypes.ClassNumber | InputTypes.NumberFlagDecimal);
+            _freq = Input("145.500", InputTypes.ClassNumber | InputTypes.NumberFlagDecimal, false, 48);
             _notes = Input("通联内容、天气、天线方向……", InputTypes.ClassText | InputTypes.TextFlagMultiLine, true);
             _call = Input("例如 BG7XXX", InputTypes.ClassText | InputTypes.TextFlagCapCharacters);
             _rstTx = Input("发 59", InputTypes.ClassText);
@@ -191,6 +203,7 @@ namespace HamJi
             _ant = Input("天线 / 频段", InputTypes.ClassText);
 
             _mode = new ModeDropdown(this, ModeNames);
+            _mode.LayoutParameters = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, Dui.Dp(48));
             _mode.Select(0, false);
         }
 
@@ -203,8 +216,8 @@ namespace HamJi
             // 频率 + 模式 合并成一行
             var row = Dui.HBox();
             row.SetClipChildren(false);
-            row.AddView(Field("频率 (MHz)", _freq), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f) { RightMargin = Dui.Dp(10) });
-            row.AddView(Field("模式", _mode), new LinearLayout.LayoutParams(Dui.Dp(114), ViewGroup.LayoutParams.WrapContent));
+            row.AddView(Field("频率 (MHz)", _freq, 48), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f) { RightMargin = Dui.Dp(10) });
+            row.AddView(Field("模式", _mode, 48), new LinearLayout.LayoutParams(Dui.Dp(114), ViewGroup.LayoutParams.WrapContent));
             _form.AddView(row);
 
             if (_kind == RecKind.Frequency)
@@ -322,7 +335,7 @@ namespace HamJi
             if (v.Parent is ViewGroup vg) vg.RemoveView(v);
         }
 
-        private View Field(string label, View input)
+        private View Field(string label, View input, int inputHeightDp = 0)
         {
             var box = Dui.VBox();
             box.SetClipChildren(false);
@@ -330,12 +343,14 @@ namespace HamJi
             var tv = Dui.Label(label, 11.5f, Dui.TextSecondary, true);
             tv.LetterSpacing = 0.03f;
             box.AddView(tv);
-            var lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent) { TopMargin = Dui.Dp(8) };
+            var lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent,
+                inputHeightDp > 0 ? Dui.Dp(inputHeightDp) : ViewGroup.LayoutParams.WrapContent)
+            { TopMargin = Dui.Dp(8) };
             box.AddView(input, lp);
             return box;
         }
 
-        private EditText Input(string hint, InputTypes type, bool multiline = false)
+        private EditText Input(string hint, InputTypes type, bool multiline = false, int heightDp = 0)
         {
             var e = new EditText(this);
             e.Hint = hint;
@@ -358,6 +373,13 @@ namespace HamJi
             {
                 e.SetSingleLine(true);
                 e.Gravity = GravityFlags.CenterVertical;
+            }
+            if (heightDp > 0)
+            {
+                e.SetMinHeight(Dui.Dp(heightDp));
+                e.SetMaxHeight(Dui.Dp(heightDp));
+                e.Gravity = GravityFlags.CenterVertical;
+                e.SetPadding(Dui.Dp(14), 0, Dui.Dp(14), 0);
             }
             e.FocusChange += (s, ev) => { if (ev.HasFocus) EnsureVisible(e); };
             return e;
@@ -667,13 +689,7 @@ namespace HamJi
 
         public Segmented(Context c, string[] labels) : base(c)
         {
-            var bg = Dui.Round(Dui.InputBg, 14);
-            var stroke = new GradientDrawable();
-            stroke.SetColor(Color.Transparent);
-            stroke.SetCornerRadius(Dui.Dpf(14));
-            stroke.SetStroke(Math.Max(1, Dui.Dp(1)), new Color(Dui.InputBorder));
-            var layer = new LayerDrawable(new Drawable[] { bg, stroke });
-            SetBackgroundDrawable(layer);
+            SetBackgroundDrawable(Dui.Round(Dui.InputBg, 14));
 
             var row = Dui.HBox();
             row.SetPadding(Dui.Dp(4), Dui.Dp(4), Dui.Dp(4), Dui.Dp(4));
@@ -800,7 +816,7 @@ namespace HamJi
             sv.AddView(list, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent));
 
             _pop = new PopupWindow(sv, Width, ViewGroup.LayoutParams.WrapContent);
-            _pop.SetBackgroundDrawable(Dui.Stroke(Dui.SheetBg, 16, Dui.CardBorder, 1));
+            _pop.SetBackgroundDrawable(Dui.Round(Dui.SheetBg, 16));
             _pop.OutsideTouchable = true;
             _pop.Focusable = true;
             _pop.Elevation = Dui.Dpf(12);

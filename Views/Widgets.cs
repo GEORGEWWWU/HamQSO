@@ -113,20 +113,20 @@ namespace HamJi.Views
         {
             var row = Dui.HBox();
             row.LayoutParameters = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
-            row.SetPadding(Dui.Dp(16), Dui.Dp(14), Dui.Dp(14), Dui.Dp(14));
+            row.SetPadding(Dui.Dp(14), Dui.Dp(11), Dui.Dp(12), Dui.Dp(11));
             row.Clickable = true;
             row.Focusable = true;
             row.SetBackgroundDrawable(RowRipple(18));
 
             int fg = danger ? Dui.Danger : Dui.TextPrimary;
             var bubble = new FrameLayout(Dui.Ctx);
-            bubble.SetBackgroundDrawable(Dui.Round(danger ? Dui.WithAlpha(Dui.Danger, 26) : Dui.AccentSoft, 11));
-            var ic = Dui.Icon(iconRes, 19, danger ? Dui.Danger : Dui.Accent);
-            bubble.AddView(ic, new FrameLayout.LayoutParams(Dui.Dp(19), Dui.Dp(19)) { Gravity = GravityFlags.Center });
-            row.AddView(bubble, new LinearLayout.LayoutParams(Dui.Dp(34), Dui.Dp(34)));
+            bubble.SetBackgroundDrawable(Dui.Round(danger ? Dui.WithAlpha(Dui.Danger, 26) : Dui.AccentSoft, 10));
+            var ic = Dui.Icon(iconRes, 17, danger ? Dui.Danger : Dui.Accent);
+            bubble.AddView(ic, new FrameLayout.LayoutParams(Dui.Dp(17), Dui.Dp(17)) { Gravity = GravityFlags.Center });
+            row.AddView(bubble, new LinearLayout.LayoutParams(Dui.Dp(30), Dui.Dp(30)));
 
-            var tv = Dui.Label(title, 14.5f, fg, false);
-            var tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f) { LeftMargin = Dui.Dp(12) };
+            var tv = Dui.Label(title, 14f, fg, false);
+            var tlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f) { LeftMargin = Dui.Dp(10) };
             row.AddView(tv, tlp);
 
             if (!string.IsNullOrEmpty(value))

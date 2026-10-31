@@ -110,13 +110,12 @@ namespace HamJi.Core
             return d;
         }
 
-        /// <summary>亚克力卡片：半透明填充 + 高光描边。</summary>
+        /// <summary>卡片：纯半透明填充，无描边。</summary>
         public static Drawable GlassCard()
         {
             var d = new GradientDrawable(GradientDrawable.Orientation.TopBottom,
                 new[] { Mix(CardBg, Color.White, Dark ? 0.05f : 0.32f), CardBg });
             d.SetCornerRadius(Dpf(16));
-            d.SetStroke(Math.Max(1, Dp(1)), new Color(CardBorder));
             return d;
         }
 
@@ -128,10 +127,11 @@ namespace HamJi.Core
         public static Drawable AccentRipple(Drawable content)
             => Ripple(WithAlpha(Accent, 40), content);
 
+        /// <summary>输入框：扁平填充，无边框；聚焦时只是底色变化。</summary>
         public static Drawable InputFieldBg()
         {
-            var normal = Stroke(InputBg, 14, InputBorder, 1.2f);
-            var focused = Stroke(InputBg, 14, WithAlpha(Accent, 210), 1.8f);
+            var normal = Round(Mix(InputBg, TextPrimary, Dark ? 0.02f : 0.01f), 14);
+            var focused = Round(WithAlpha(Accent, Dark ? 46 : 26), 14);
             var sl = new StateListDrawable();
             sl.AddState(new[] { Android.Resource.Attribute.StateFocused }, focused);
             sl.AddState(new int[] { }, normal);

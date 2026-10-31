@@ -17,6 +17,8 @@ namespace HamJi.Pages
         protected readonly TextView SubtitleView;
         protected readonly ScrollView Scroller;
         protected readonly LinearLayout ListHost;
+        protected bool ShowHeader = true;
+        private SwipeRow _openRow;
 
         protected BasePage(Context c) : base(c)
         {
@@ -43,8 +45,17 @@ namespace HamJi.Pages
 
         public void ApplyInsets(int topInset, int bottomSpace)
         {
-            Header.SetPadding(Dui.Dp(22), topInset + Dui.Dp(12), Dui.Dp(22), Dui.Dp(6));
-            ListHost.SetPadding(Dui.Dp(16), 0, Dui.Dp(16), bottomSpace);
+            if (ShowHeader)
+            {
+                Header.Visibility = ViewStates.Visible;
+                Header.SetPadding(Dui.Dp(22), topInset + Dui.Dp(12), Dui.Dp(22), Dui.Dp(6));
+            }
+            else
+            {
+                Header.Visibility = ViewStates.Gone;
+                ListHost.SetPadding(Dui.Dp(16), topInset + Dui.Dp(6), Dui.Dp(16), bottomSpace);
+            }
+            ListHost.SetPadding(Dui.Dp(16), ShowHeader ? 0 : topInset + Dui.Dp(6), Dui.Dp(16), bottomSpace);
         }
 
         public void Refresh()
@@ -79,9 +90,20 @@ namespace HamJi.Pages
 
                 foreach (var rec in g)
                 {
-                    var card = Widgets.Card();
-                    card.AddView(rowFactory(rec));
-                    ListHost.AddView(card);
+                    var record = rec;
+                    var swipe = new SwipeRow(Context, rowFactory(rec));
+                    swipe.Opened += sw =>
+                    {
+                        if (_openRow != null && _openRow != sw) _openRow.Close();
+                        _openRow = sw;
+                    };
+                    swipe.DeleteRequested += sw =>
+                    {
+                        Store.Remove(record.Id);
+                        _openRow = null;
+                        Refresh();
+                    };
+                    ListHost.AddView(swipe);
                 }
             }
         }

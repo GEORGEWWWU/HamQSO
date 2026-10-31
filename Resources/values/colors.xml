@@ -29,7 +29,7 @@
   <color name="nav_icon">#FF6B7C8E</color>
   <color name="nav_icon_on">#FF1F6BFF</color>
 
-  <color name="input_bg">#8CFFFFFF</color>
+  <color name="input_bg">#FFF0F3F8</color>
   <color name="input_border">#2E14282E</color>
 
   <color name="scrim">#66000B18</color>
