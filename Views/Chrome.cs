@@ -75,6 +75,9 @@ namespace HamJi.Views
         private int _current = -1;
         private float _itemW;
         private float _iw;
+        private int _ih;
+        private bool _geoPending;
+        private int _geoRetry;
         private int _slopPx;
 
         private bool _dragging;
@@ -125,10 +128,46 @@ namespace HamJi.Views
             base.OnSizeChanged(w, h, oldw, oldh);
             _itemW = w / 3f;
             _iw = Math.Max(Dui.Dp(64), _itemW - Dui.Dp(10));
-            var lp = (FrameLayout.LayoutParams)_indicator.LayoutParameters;
-            lp.Width = (int)_iw;
-            lp.Height = Math.Max(Dui.Dp(40), h - Dui.Dp(12));
-            _indicator.LayoutParameters = lp;
+            _ih = Math.Max(Dui.Dp(40), h - Dui.Dp(12));
+            ApplyIndicatorGeometry();
+            PostGeometryPass();
+        }
+
+        /// <summary>布局遍历之外再补一次尺寸校正（最多重试几次，防止空转）。</summary>
+        private void PostGeometryPass()
+        {
+            if (_geoPending || _geoRetry > 3) return;
+            _geoPending = true;
+            _indicator.Post(() =>
+            {
+                _geoPending = false;
+                _geoRetry++;
+                ApplyIndicatorGeometry();
+            });
+        }
+
+        /// <summary>把滑块尺寸与位置对齐到当前导航尺寸。幂等，可重复调用。</summary>
+        private void ApplyIndicatorGeometry()
+        {
+            if (_indicator == null || _itemW <= 0) return;
+            int wantW = (int)_iw;
+            int wantH = _ih;
+            var lp = _indicator.LayoutParameters as FrameLayout.LayoutParams;
+            if (lp != null && (lp.Width != wantW || lp.Height != wantH))
+            {
+                lp.Width = wantW;
+                lp.Height = wantH;
+                _indicator.LayoutParameters = lp;
+            }
+            // 关键：OnSizeChanged 发生在布局遍历中，此时改子 View 的 LayoutParameters
+            // 只排队了 requestLayout 却会被本次遍历吞掉，滑块就会停在测量阶段的旧尺寸
+            // （构造时的 90x52dp），直到别的原因再触发一次重新布局才「自己变正常」。
+            // 所以这里显式请求重排，并确保这次请求发生在遍历之外。
+            if (_indicator.Width != wantW || _indicator.Height != wantH)
+            {
+                _indicator.RequestLayout();
+                PostGeometryPass();
+            }
             if (!_dragging)
             {
                 _spring.Stop();
