@@ -53,6 +53,7 @@ namespace HamJi
                 Store.EnsureLoaded();
                 Store.Changed += OnStoreChanged;
                 Store.Error += OnStoreError;
+                Updater.SilentCheck(this);   // 静默检查更新：有新版才打扰
                 if (savedInstanceState != null)
                 {
                     var idx = savedInstanceState.GetInt("tab", 0);

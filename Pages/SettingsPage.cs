@@ -63,6 +63,7 @@ namespace HamJi.Pages
             // 关于
             var card2 = Widgets.Card();
             card2.AddView(Row(Resource.Drawable.ic_info, "版本", AppInfo.VersionName, null));
+            card2.AddView(Row(Resource.Drawable.ic_update, "检查更新", "v" + AppInfo.VersionName, CheckUpdate));
 
             var themeRow = Widgets.SettingRow(Resource.Drawable.ic_settings, "主题色",
                 AppTheme.Names[AppTheme.Current], false, true, AppTheme.Swatch(AppTheme.Current));
@@ -80,7 +81,13 @@ namespace HamJi.Pages
             return v;
         }
 
-        private View Row(int icon, string title, string value, Action onClick, bool danger = false)
+        private void CheckUpdate()
+        {
+            Toast.MakeText(Context, "正在检查更新…", ToastLength.Short).Show();
+            Updater.ManualCheck(Context);
+        }
+
+        private LinearLayout Row(int icon, string title, string value, Action onClick, bool danger = false)
         {
             var row = Widgets.SettingRow(icon, title, value, danger, onClick != null);
             if (onClick != null) row.Click += (s2, e2) => onClick();
