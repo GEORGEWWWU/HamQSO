@@ -133,6 +133,7 @@ namespace HamJi.Views
             {
                 _spring.Stop();
                 _indicator.TranslationX = XOf(Math.Max(0, _current));
+                _spring.Sync(_indicator.TranslationX);
             }
         }
 
@@ -153,6 +154,7 @@ namespace HamJi.Views
                 foreach (var it in _items) it.SetSelected(it.Index == index, animate);
             }
             if (_dragging) return;
+            _spring.Sync(_indicator.TranslationX);
             if (animate) _spring.To(XOf(index));
             else { _spring.Stop(); _indicator.TranslationX = XOf(index); }
         }
@@ -163,6 +165,7 @@ namespace HamJi.Views
             bool changed = index != _current;
             _current = index;
             foreach (var it in _items) it.SetSelected(it.Index == index, animate);
+            _spring.Sync(_indicator.TranslationX);
             if (animate) _spring.To(XOf(index));
             else { _spring.Stop(); _indicator.TranslationX = XOf(index); }
             if (changed) Selected?.Invoke(index);
@@ -212,6 +215,7 @@ namespace HamJi.Views
                         float x = e.GetX() - _iw / 2f;
                         x = Math.Max(0, Math.Min(Width - _iw, x));
                         _indicator.TranslationX = x;
+                        _spring.Sync(x);
                         long dt = e.EventTime - _lastT;
                         if (dt > 0) _vel = (e.GetX() - _lastX) * 1000f / dt;
                         _lastX = e.GetX();
@@ -257,6 +261,12 @@ namespace HamJi.Views
             {
                 _running = false;
                 _last = 0;
+            }
+
+            /// <summary>把内部位置同步到当前视觉位置（拖拽后调用），否则弹簧会从旧位置闪回。</summary>
+            public void Sync(float x)
+            {
+                _x = x;
             }
 
             public void DoFrame(long frameTimeNanos)

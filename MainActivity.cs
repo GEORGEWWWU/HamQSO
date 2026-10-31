@@ -235,9 +235,7 @@ namespace HamJi
             if (animate)
             {
                 page.Alpha = 0f;
-                page.TranslationY = Dui.Dpf(14);
-                page.Animate().Alpha(1f).TranslationY(0f).SetDuration(240)
-                    .SetInterpolator(new DecelerateInterpolator(1.6f)).Start();
+                page.Animate().Alpha(1f).SetDuration(200).Start();
             }
 
             _currentPage = page;
@@ -261,29 +259,19 @@ namespace HamJi
 
         private void SetFabVisible(bool visible, bool animate)
         {
+            // 悬浮按钮不参与切页动画：只做淡入淡出，且不做缩放，避免"闪现"感
+            _fab.ScaleX = 1f;
+            _fab.ScaleY = 1f;
             if (visible)
             {
                 _fab.Visibility = ViewStates.Visible;
-                if (animate)
-                {
-                    _fab.Alpha = 0f;
-                    _fab.ScaleX = 0.7f;
-                    _fab.ScaleY = 0.7f;
-                    _fab.Animate().Alpha(1f).ScaleX(1f).ScaleY(1f).SetDuration(220)
-                        .SetInterpolator(new OvershootInterpolator(1.4f)).Start();
-                }
-                else
-                {
-                    _fab.Alpha = 1f;
-                    _fab.ScaleX = 1f;
-                    _fab.ScaleY = 1f;
-                }
+                _fab.Alpha = 1f;
             }
             else
             {
                 if (animate)
                 {
-                    _fab.Animate().Alpha(0f).ScaleX(0.6f).ScaleY(0.6f).SetDuration(160)
+                    _fab.Animate().Alpha(0f).SetDuration(140)
                         .WithEndAction(new Java.Lang.Runnable(() => { if (_current == 2) _fab.Visibility = ViewStates.Gone; }))
                         .Start();
                 }
@@ -297,29 +285,18 @@ namespace HamJi
 
         private void SetCloudVisible(bool visible, bool animate)
         {
+            _cloud.ScaleX = 1f;
+            _cloud.ScaleY = 1f;
             if (visible)
             {
                 _cloud.Visibility = ViewStates.Visible;
-                if (animate)
-                {
-                    _cloud.Alpha = 0f;
-                    _cloud.ScaleX = 0.7f;
-                    _cloud.ScaleY = 0.7f;
-                    _cloud.Animate().Alpha(1f).ScaleX(1f).ScaleY(1f).SetDuration(220)
-                        .SetInterpolator(new OvershootInterpolator(1.4f)).Start();
-                }
-                else
-                {
-                    _cloud.Alpha = 1f;
-                    _cloud.ScaleX = 1f;
-                    _cloud.ScaleY = 1f;
-                }
+                _cloud.Alpha = 1f;
             }
             else
             {
                 if (animate)
                 {
-                    _cloud.Animate().Alpha(0f).ScaleX(0.6f).ScaleY(0.6f).SetDuration(160)
+                    _cloud.Animate().Alpha(0f).SetDuration(140)
                         .WithEndAction(new Java.Lang.Runnable(() => { if (_current == 2) _cloud.Visibility = ViewStates.Gone; }))
                         .Start();
                 }

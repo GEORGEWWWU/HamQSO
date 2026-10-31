@@ -7,10 +7,10 @@ using Android.Graphics.Drawables;
 using Android.OS;
 using Android.Text;
 using Android.Views;
+using Android.Views.Animations;
 using Android.Views.InputMethods;
 using Android.Widget;
 using Android.Animation;
-using Android.Views.Animations;
 using HamJi.Core;
 using HamJi.Views;
 
@@ -25,25 +25,33 @@ namespace HamJi
             | ConfigChanges.KeyboardHidden | ConfigChanges.Keyboard)]
     public class NewRecordActivity : Activity
     {
-        private static readonly string[] Modes =
+        private static readonly string[] ModeNames =
         {
             "SSB", "CW", "FM", "AM", "FT8", "FT4", "RTTY", "PSK31", "DMR", "C4FM", "D-STAR", "其他"
         };
 
         private FrameLayout _root;
+        private View _scrim;
         private LinearLayout _sheet;
         private LinearLayout _form;
-        private View _scrim;
+        private MaxHeightScrollView _scroll;
         private Segmented _seg;
+        private View _dragArea;
+        private LinearLayout _saveWrap;
 
         private EditText _freq, _notes, _call, _rstTx, _rstRx, _qth, _rig, _power, _ant;
         private TextView _dateBtn, _timeBtn;
-        private ModePicker _modePicker;
-        private TextView _saveBtn;
+        private ModeDropdown _mode;
 
         private RecKind _kind = RecKind.Frequency;
         private DateTime _when = DateTime.Now;
-        private int _imeBottom;
+
+        private int _statusInset, _imeInset, _navInset;
+        private int _fitH, _fullH;
+        private bool _dragSheet;
+        private float _downRawY;
+        private int _startH;
+        private ValueAnimator _heightAnim;
 
         protected override void OnCreate(Bundle savedInstanceState)
         {
@@ -53,9 +61,6 @@ namespace HamJi
             Window.SetStatusBarColor(Color.Transparent);
             Window.SetNavigationBarColor(Color.Transparent);
             if ((int)Build.VERSION.SdkInt >= 30) Window.SetDecorFitsSystemWindows(false);
-            if ((int)Build.VERSION.SdkInt >= 29)
-            {
-            }
             BuildUi();
         }
 
@@ -76,21 +81,22 @@ namespace HamJi
             _sheet.SetBackgroundDrawable(bg);
             _sheet.Elevation = Dui.Dpf(24);
 
-            // 拖拽指示条
+            // ---- 可拖拽区：指示条 + 标题栏 ----
+            var dragArea = Dui.VBox();
+            dragArea.SetClipChildren(false);
+
             var handleBox = new FrameLayout(this);
             var handle = new View(this);
-            handle.SetBackgroundDrawable(Dui.Round(Dui.WithAlpha(Dui.TextTertiary, 90), 3));
-            handleBox.AddView(handle, new FrameLayout.LayoutParams(Dui.Dp(38), Dui.Dp(4)) { Gravity = GravityFlags.Center });
-            var hlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, Dui.Dp(18));
-            _sheet.AddView(handleBox, hlp);
+            handle.SetBackgroundDrawable(Dui.Round(Dui.WithAlpha(Dui.TextTertiary, 110), 3));
+            handleBox.AddView(handle, new FrameLayout.LayoutParams(Dui.Dp(40), Dui.Dp(5)) { Gravity = GravityFlags.Center });
+            dragArea.AddView(handleBox, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, Dui.Dp(22)));
 
-            // 顶部栏
             var head = Dui.HBox();
             head.SetPadding(Dui.Dp(22), 0, Dui.Dp(14), Dui.Dp(6));
 
             var titleBox = Dui.VBox();
             var t = Dui.Label("新建记录", 19f, Dui.TextPrimary, true);
-            var st = Dui.Label("记录一次守听或一次通联", 11.5f, Dui.TextTertiary, false);
+            var st = Dui.Label("记录一次守听或一次通联 · 可上拉铺满", 11.5f, Dui.TextTertiary, false);
             var stlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent) { TopMargin = Dui.Dp(3) };
             titleBox.AddView(t);
             titleBox.AddView(st, stlp);
@@ -104,9 +110,13 @@ namespace HamJi
             HamJi.Core.Touch.Bind(close, () => Close(false), 0.9f);
             head.AddView(close, new LinearLayout.LayoutParams(Dui.Dp(36), Dui.Dp(36)) { Gravity = GravityFlags.CenterVertical });
 
-            _sheet.AddView(head, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent));
+            dragArea.AddView(head, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent));
+            _sheet.AddView(dragArea, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent));
+            _dragArea = dragArea;
+            dragArea.Clickable = true;
+            dragArea.SetOnTouchListener(new DragHandler(this));
 
-            // 类型选择
+            // ---- 类型选择 ----
             _seg = new Segmented(this, new[] { "通联频率", "通联日志" });
             _seg.Selected += idx =>
             {
@@ -119,19 +129,21 @@ namespace HamJi
             segLp.RightMargin = Dui.Dp(22);
             _sheet.AddView(_seg, segLp);
 
-            // 表单
-            var scroll = new MaxHeightScrollView(this) { MaxRatio = 0.62f };
-            scroll.VerticalScrollBarEnabled = false;
-            scroll.OverScrollMode = OverScrollMode.Never;
+            // ---- 表单 ----
+            _scroll = new MaxHeightScrollView(this) { MaxRatio = 1f };
+            _scroll.VerticalScrollBarEnabled = false;
+            _scroll.OverScrollMode = OverScrollMode.Never;
+
             _form = Dui.VBox();
-            _form.SetPadding(Dui.Dp(22), Dui.Dp(16), Dui.Dp(22), Dui.Dp(6));
-            scroll.AddView(_form, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent));
-            _sheet.AddView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent));
+            _form.SetPadding(Dui.Dp(22), Dui.Dp(16), Dui.Dp(22), Dui.Dp(10));
+            _scroll.AddView(_form, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent));
+            _sheet.AddView(_scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, 0, 1f));
 
             CreateInputs();
 
-            // 保存按钮
+            // ---- 保存 ----
             var saveWrap = new LinearLayout(this);
+            _saveWrap = saveWrap;
             saveWrap.SetPadding(Dui.Dp(22), Dui.Dp(10), Dui.Dp(22), Dui.Dp(16));
             var save = new TextView(this);
             save.Text = "保存";
@@ -143,7 +155,6 @@ namespace HamJi
             sbg.SetCornerRadius(Dui.Dpf(16));
             save.SetBackgroundDrawable(Dui.Ripple(Dui.WithAlpha(Color.White, 70), sbg));
             save.Clickable = true;
-            _saveBtn = save;
             HamJi.Core.Touch.Bind(save, Save, 0.97f);
             saveWrap.AddView(save, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, Dui.Dp(52)));
             _sheet.AddView(saveWrap, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent));
@@ -159,6 +170,8 @@ namespace HamJi
 
             _sheet.Post(() =>
             {
+                int natural = NaturalHeight();
+                if (natural > 0) _fitH = natural;
                 _sheet.TranslationY = _sheet.Height;
                 _sheet.Animate().TranslationY(0f).SetDuration(300).SetInterpolator(new DecelerateInterpolator(1.5f)).Start();
                 _scrim.Animate().Alpha(1f).SetDuration(220).Start();
@@ -167,7 +180,7 @@ namespace HamJi
 
         private void CreateInputs()
         {
-            _freq = Input("例如 145.500", InputTypes.ClassNumber | InputTypes.NumberFlagDecimal);
+            _freq = Input("145.500", InputTypes.ClassNumber | InputTypes.NumberFlagDecimal);
             _notes = Input("通联内容、天气、天线方向……", InputTypes.ClassText | InputTypes.TextFlagMultiLine, true);
             _call = Input("例如 BG7XXX", InputTypes.ClassText | InputTypes.TextFlagCapCharacters);
             _rstTx = Input("发 59", InputTypes.ClassText);
@@ -177,24 +190,22 @@ namespace HamJi
             _power = Input("功率 W", InputTypes.ClassNumber | InputTypes.NumberFlagDecimal);
             _ant = Input("天线 / 频段", InputTypes.ClassText);
 
-            _modePicker = new ModePicker(this, Modes);
-            _modePicker.Select(0);
+            _mode = new ModeDropdown(this, ModeNames);
+            _mode.Select(0, false);
         }
 
         private void BuildForm()
         {
             Detach(_freq); Detach(_notes); Detach(_call); Detach(_rstTx); Detach(_rstRx);
-            Detach(_qth); Detach(_rig); Detach(_power); Detach(_ant); Detach(_modePicker);
+            Detach(_qth); Detach(_rig); Detach(_power); Detach(_ant); Detach(_mode);
             _form.RemoveAllViews();
 
-            _form.AddView(Field("频率 (MHz)", _freq));
-
-            AddGap();
-            var modeLabel = Dui.Label("模式", 11.5f, Dui.TextSecondary, true);
-            modeLabel.LetterSpacing = 0.03f;
-            _form.AddView(modeLabel);
-            var mp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent) { TopMargin = Dui.Dp(8) };
-            _form.AddView(_modePicker, mp);
+            // 频率 + 模式 合并成一行
+            var row = Dui.HBox();
+            row.SetClipChildren(false);
+            row.AddView(Field("频率 (MHz)", _freq), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f) { RightMargin = Dui.Dp(10) });
+            row.AddView(Field("模式", _mode), new LinearLayout.LayoutParams(Dui.Dp(114), ViewGroup.LayoutParams.WrapContent));
+            _form.AddView(row);
 
             if (_kind == RecKind.Frequency)
             {
@@ -212,12 +223,9 @@ namespace HamJi
                 AddGap();
 
                 var rstRow = Dui.HBox();
-                var l = Field("信号报告 (发)", _rstTx);
-                var r = Field("信号报告 (收)", _rstRx);
-                var llp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f) { RightMargin = Dui.Dp(10) };
-                var rlp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f);
-                rstRow.AddView(l, llp);
-                rstRow.AddView(r, rlp);
+                rstRow.SetClipChildren(false);
+                rstRow.AddView(Field("信号报告 (发)", _rstTx), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f) { RightMargin = Dui.Dp(10) });
+                rstRow.AddView(Field("信号报告 (收)", _rstRx), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f));
                 _form.AddView(rstRow);
 
                 AddGap();
@@ -225,6 +233,7 @@ namespace HamJi
 
                 AddGap();
                 var rigRow = Dui.HBox();
+                rigRow.SetClipChildren(false);
                 rigRow.AddView(Field("设备", _rig), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1.6f) { RightMargin = Dui.Dp(10) });
                 rigRow.AddView(Field("功率 (W)", _power), new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f));
                 _form.AddView(rigRow);
@@ -235,16 +244,27 @@ namespace HamJi
                 AddGap();
                 _form.AddView(Field("备注", _notes));
             }
+
+            _form.Post(() =>
+            {
+                if (_dragSheet || _imeInset > 0) return;
+                int natural = NaturalHeight();
+                if (natural > 0 && Math.Abs(natural - _fitH) > Dui.Dp(4))
+                {
+                    _fitH = natural;
+                    ApplyInsets(_statusInset, _imeInset, _navInset);
+                }
+            });
         }
 
         private View TimeRow()
         {
             var row = Dui.HBox();
+            row.SetClipChildren(false);
             _dateBtn = PillText();
             _timeBtn = PillText();
 
-            var dlp = new LinearLayout.LayoutParams(0, Dui.Dp(48), 1f) { RightMargin = Dui.Dp(10) };
-            row.AddView(_dateBtn, dlp);
+            row.AddView(_dateBtn, new LinearLayout.LayoutParams(0, Dui.Dp(48), 1f) { RightMargin = Dui.Dp(10) });
             row.AddView(_timeBtn, new LinearLayout.LayoutParams(0, Dui.Dp(48), 1f));
 
             _dateBtn.Click += (s, e) =>
@@ -305,6 +325,7 @@ namespace HamJi
         private View Field(string label, View input)
         {
             var box = Dui.VBox();
+            box.SetClipChildren(false);
             box.LayoutParameters = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
             var tv = Dui.Label(label, 11.5f, Dui.TextSecondary, true);
             tv.LetterSpacing = 0.03f;
@@ -338,7 +359,176 @@ namespace HamJi
                 e.SetSingleLine(true);
                 e.Gravity = GravityFlags.CenterVertical;
             }
+            e.FocusChange += (s, ev) => { if (ev.HasFocus) EnsureVisible(e); };
             return e;
+        }
+
+        /// <summary>把焦点输入框滚进可视区（键盘弹起后也能看到）。</summary>
+        private void EnsureVisible(View v)
+        {
+            _scroll.PostDelayed(() =>
+            {
+                try
+                {
+                    var lv = new int[2];
+                    var ls = new int[2];
+                    v.GetLocationInWindow(lv);
+                    _scroll.GetLocationInWindow(ls);
+                    int topInScroll = lv[1] - ls[1] + _scroll.ScrollY;
+                    int target = Math.Max(0, topInScroll - Dui.Dp(24));
+                    _scroll.SmoothScrollTo(0, target);
+                }
+                catch { }
+            }, 300);
+        }
+
+        // ---------------- 高度 / 拖拽 ----------------
+
+        internal void ApplyInsets(int status, int ime, int nav)
+        {
+            _statusInset = status;
+            _imeInset = ime;
+            _navInset = nav;
+
+            int screenH = Resources.DisplayMetrics.HeightPixels;
+
+            // 弹层底边：有键盘时压在键盘上沿，无键盘时贴屏幕底（盖住手势条）
+            int bottomGap = ime;
+            var lp = (FrameLayout.LayoutParams)_sheet.LayoutParameters;
+            lp.BottomMargin = bottomGap;
+
+            // 顶部上限：始终停在状态栏下方（留 12dp，避免下拉手势被系统通知栏抢走）
+            int topSafe = status + Dui.Dp(12);
+            _fullH = Math.Max(Dui.Dp(280), screenH - bottomGap - topSafe);
+
+            // 保存按钮下方让出系统手势条（键盘显示时不需要）
+            if (_saveWrap != null)
+            {
+                int padBottom = ime > 0 ? Dui.Dp(16) : nav + Dui.Dp(16);
+                _saveWrap.SetPadding(Dui.Dp(22), Dui.Dp(10), Dui.Dp(22), padBottom);
+            }
+
+            if (!_dragSheet)
+            {
+                if (ime > 0) lp.Height = _fullH;
+                else lp.Height = _fitH > 0 ? Math.Min(_fitH, _fullH) : Math.Min(Dui.Dp(520), _fullH);
+            }
+            _sheet.LayoutParameters = lp;
+
+            // 表单区是唯一可伸缩部分：限高 = 可用高度 - 固定部分
+            int others = FixedChromeHeight();
+            _scroll.MaxHeightPx = Math.Max(Dui.Dp(120), _fullH - others);
+            _scroll.RequestLayout();
+
+            if (ime > 0 && CurrentFocus is EditText) EnsureVisible(CurrentFocus);
+        }
+
+        /// <summary>除表单区以外的固定高度（标题区 + 分段 + 保存区 + 内边距）。</summary>
+        private int FixedChromeHeight()
+        {
+            int h = 0;
+            try
+            {
+                if (_dragArea != null) h += _dragArea.Height;
+                if (_seg != null)
+                {
+                    h += _seg.Height;
+                    if (_seg.LayoutParameters is LinearLayout.LayoutParams slp) h += slp.TopMargin + slp.BottomMargin;
+                }
+                if (_saveWrap != null) h += _saveWrap.Height;
+                if (_form != null) h += _form.PaddingTop + _form.PaddingBottom;
+            }
+            catch { }
+            if (h < Dui.Dp(180)) h = Dui.Dp(260);
+            return h;
+        }
+
+        /// <summary>内容自然高度：标题区 + 分段 + 表单 + 保存区。</summary>
+        private int NaturalHeight()
+        {
+            try
+            {
+                int h = 0;
+                if (_dragArea != null) h += _dragArea.Height;
+                if (_seg != null)
+                {
+                    h += _seg.Height;
+                    if (_seg.LayoutParameters is LinearLayout.LayoutParams slp) h += slp.TopMargin + slp.BottomMargin;
+                }
+                if (_saveWrap != null) h += _saveWrap.Height;
+                if (_form != null) h += _form.Height + _form.PaddingTop + _form.PaddingBottom;
+                return h;
+            }
+            catch { return 0; }
+        }
+
+        private void SetSheetHeight(int h)
+        {
+            var lp = (FrameLayout.LayoutParams)_sheet.LayoutParameters;
+            lp.Height = h;
+            _sheet.LayoutParameters = lp;
+        }
+
+        private void AnimateHeight(int from, int to)
+        {
+            try { _heightAnim?.Cancel(); } catch { }
+            _heightAnim = ValueAnimator.OfInt(from, to);
+            _heightAnim.SetDuration(220);
+            _heightAnim.SetInterpolator(new DecelerateInterpolator(1.4f));
+            _heightAnim.Update += (s, e) =>
+            {
+                int v = from;
+                var raw = e.Animation.AnimatedValue;
+                if (raw is Java.Lang.Integer ji) v = ji.IntValue();
+                else if (raw != null) int.TryParse(raw.ToString(), out v);
+                SetSheetHeight(v);
+            };
+            _heightAnim.Start();
+        }
+
+        private class DragHandler : Java.Lang.Object, View.IOnTouchListener
+        {
+            private readonly NewRecordActivity _a;
+            public DragHandler(NewRecordActivity a) { _a = a; }
+
+            public bool OnTouch(View v, MotionEvent e)
+            {
+                try { return Handle(e); }
+                catch { return false; }
+            }
+
+            private bool Handle(MotionEvent e)
+            {
+                switch (e.ActionMasked)
+                {
+                    case MotionEventActions.Down:
+                        _a._dragSheet = true;
+                        _a._startH = _a._sheet.Height > 0 ? _a._sheet.Height : _a._fitH;
+                        _a._downRawY = e.RawY;
+                        try { _a._heightAnim?.Cancel(); } catch { }
+                        return true;
+
+                    case MotionEventActions.Move:
+                        if (!_a._dragSheet) return true;
+                        int h = (int)(_a._startH - (e.RawY - _a._downRawY));
+                        int min = Dui.Dp(240);
+                        int max = _a._fullH > 0 ? _a._fullH : h;
+                        h = Math.Max(min, Math.Min(max, h));
+                        _a.SetSheetHeight(h);
+                        return true;
+
+                    case MotionEventActions.Up:
+                    case MotionEventActions.Cancel:
+                        if (!_a._dragSheet) return true;
+                        _a._dragSheet = false;
+                        int cur = _a._sheet.Height;
+                        if (cur < _a._fullH * 0.45f) { _a.Close(false); return true; }
+                        int target = cur > _a._fullH * 0.8f ? _a._fullH : (_a._fitH > 0 ? _a._fitH : cur);
+                        _a.AnimateHeight(cur, target);
+                        return true;
+                }
+                return false;
+            }
         }
 
         private void Close(bool saved)
@@ -360,9 +550,9 @@ namespace HamJi
             var freqText = (_freq.Text ?? "").Trim().Replace(",", ".");
             double freq = 0;
             if (freqText.Length == 0 || !double.TryParse(freqText, System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture, out freq) || freq <= 0 || freq > 100000)
+                    System.Globalization.CultureInfo.InvariantCulture, out freq) || freq <= 0 || freq > 1000)
             {
-                Shake(_freq, "请输入有效频率，例如 145.500");
+                Shake(_freq, "请输入 0~1000 之间的频率，例如 145.500");
                 return;
             }
 
@@ -376,7 +566,7 @@ namespace HamJi
             {
                 Kind = (int)_kind,
                 Freq = freq,
-                Mode = _modePicker.SelectedText,
+                Mode = _mode.SelectedText,
                 Time = new DateTimeOffset(DateTime.SpecifyKind(_when, DateTimeKind.Local)).ToUnixTimeMilliseconds(),
                 Notes = (_notes.Text ?? "").Trim()
             };
@@ -401,23 +591,14 @@ namespace HamJi
         {
             Toast.MakeText(this, msg, ToastLength.Short).Show();
             v.RequestFocus();
-            var anim = ObjectAnimator.OfFloat(v, "translationX", 0f, Dui.Dpf(9), -Dui.Dpf(7), Dui.Dpf(5), -Dui.Dpf(3), 0f);
-            anim.SetDuration(320);
+            var anim = ObjectAnimator.OfFloat(v, "translationX", 0f, Dui.Dpf(6), -Dui.Dpf(5), Dui.Dpf(4), -Dui.Dpf(2), 0f);
+            anim.SetDuration(300);
             anim.Start();
-        }
-
-        internal void OnImeChanged(int imeBottom)
-        {
-            if (_sheet == null) return;
-            if (imeBottom == _imeBottom) return;
-            _imeBottom = imeBottom;
-            var lp = (FrameLayout.LayoutParams)_sheet.LayoutParameters;
-            lp.BottomMargin = imeBottom;
-            _sheet.LayoutParameters = lp;
         }
 
         public override void OnBackPressed()
         {
+            if (_mode != null && _mode.IsOpen) { _mode.Dismiss(); return; }
             Close(false);
         }
 
@@ -428,41 +609,51 @@ namespace HamJi
 
             public WindowInsets OnApplyWindowInsets(View v, WindowInsets insets)
             {
+                int status = 0, ime = 0, nav = 0;
                 try
                 {
                     if ((int)Build.VERSION.SdkInt >= 30)
                     {
-                        var ime = insets.GetInsets(8);
                         var sys = insets.GetInsets(7);
-                        _a.OnImeChanged(Math.Max(ime.Bottom, 0));
-                        var lp = (FrameLayout.LayoutParams)_a._sheet.LayoutParameters;
-                        lp.BottomMargin = Math.Max(ime.Bottom, sys.Bottom);
-                        _a._sheet.LayoutParameters = lp;
+                        var cut = insets.GetInsets(128);
+                        var im = insets.GetInsets(8);
+                        status = Math.Max(sys.Top, cut.Top);
+                        nav = sys.Bottom;
+                        ime = im.Bottom;
                     }
                     else
                     {
 #pragma warning disable CS0618
-                        _a.OnImeChanged(insets.SystemWindowInsetBottom);
+                        status = insets.SystemWindowInsetTop;
+                        nav = insets.SystemWindowInsetBottom;
 #pragma warning restore CS0618
                     }
                 }
                 catch { }
+                _a.ApplyInsets(status, ime, nav);
                 return insets;
             }
         }
     }
 
-    /// <summary>限制最大高度的滚动容器，让底部弹层高度自适应但不超过屏幕比例。</summary>
+    /// <summary>限制最大高度的滚动容器。</summary>
     public class MaxHeightScrollView : ScrollView
     {
         public float MaxRatio { get; set; } = 0.62f;
+        /// <summary>像素上限；>0 时优先于 MaxRatio。</summary>
+        public int MaxHeightPx { get; set; }
 
         public MaxHeightScrollView(Context c) : base(c) { }
 
         protected override void OnMeasure(int widthMeasureSpec, int heightMeasureSpec)
         {
-            var metrics = Resources.DisplayMetrics;
-            int max = (int)(metrics.HeightPixels * MaxRatio);
+            // 父容器用 EXACTLY 分配空间时（weight 撑满）不能改，否则会被内容高度卡住
+            if (MeasureSpec.GetMode(heightMeasureSpec) == MeasureSpecMode.Exactly)
+            {
+                base.OnMeasure(widthMeasureSpec, heightMeasureSpec);
+                return;
+            }
+            int max = MaxHeightPx > 0 ? MaxHeightPx : (int)(Resources.DisplayMetrics.HeightPixels * MaxRatio);
             base.OnMeasure(widthMeasureSpec, MeasureSpec.MakeMeasureSpec(max, MeasureSpecMode.AtMost));
         }
     }
@@ -543,62 +734,77 @@ namespace HamJi
         }
     }
 
-    /// <summary>模式选择：横向可滚动的胶囊单选。</summary>
-    public class ModePicker : HorizontalScrollView
+    /// <summary>模式下拉：弹窗限高，不会盖到底部保存按钮。</summary>
+    public class ModeDropdown : FrameLayout
     {
-        private readonly TextView[] _chips;
-        private readonly string[] _labels;
+        private readonly string[] _names;
+        private readonly TextView _label;
+        private PopupWindow _pop;
         private int _sel;
 
-        public string SelectedText => _labels.Length > 0 ? _labels[_sel] : "";
+        public string SelectedText => _names.Length > 0 ? _names[_sel] : "";
 
-        public ModePicker(Context c, string[] labels) : base(c)
+        public bool IsOpen => _pop != null && _pop.IsShowing;
+
+        public void Dismiss() => _pop?.Dismiss();
+
+        public ModeDropdown(Context c, string[] names) : base(c)
         {
-            _labels = labels;
-            HorizontalScrollBarEnabled = false;
-            OverScrollMode = OverScrollMode.Never;
-            var row = Dui.HBox();
-            _chips = new TextView[labels.Length];
-            for (int i = 0; i < labels.Length; i++)
+            _names = names;
+            Clickable = true;
+            SetBackgroundDrawable(Dui.InputFieldBg());
+            SetPadding(Dui.Dp(12), 0, Dui.Dp(10), 0);
+
+            _label = Dui.Label("", 15f, Dui.TextPrimary, false);
+            AddView(_label, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.MatchParent)
+            { Gravity = GravityFlags.Left | GravityFlags.CenterVertical });
+
+            var chev = Dui.Icon(Resource.Drawable.ic_chevron, 16, Dui.TextTertiary);
+            chev.Rotation = 90f;
+            AddView(chev, new FrameLayout.LayoutParams(Dui.Dp(16), Dui.Dp(16))
+            { Gravity = GravityFlags.Right | GravityFlags.CenterVertical });
+
+            HamJi.Core.Touch.Press(this, 0.97f);
+            Click += (s, e) => Show();
+        }
+
+        public void Select(int idx, bool fire)
+        {
+            _sel = Math.Max(0, Math.Min(_names.Length - 1, idx));
+            _label.Text = SelectedText;
+        }
+
+        private void Show()
+        {
+            var list = Dui.VBox();
+            list.SetPadding(Dui.Dp(6), Dui.Dp(6), Dui.Dp(6), Dui.Dp(6));
+
+            for (int i = 0; i < _names.Length; i++)
             {
-                var tv = new TextView(c);
-                tv.Text = labels[i];
-                tv.SetTextSize(Android.Util.ComplexUnitType.Sp, 12.5f);
-                tv.SetPadding(Dui.Dp(14), Dui.Dp(9), Dui.Dp(14), Dui.Dp(9));
+                var tv = Dui.Label(_names[i], 14f, i == _sel ? Dui.Accent : Dui.TextPrimary, i == _sel);
+                tv.SetPadding(Dui.Dp(14), 0, Dui.Dp(14), 0);
+                tv.Gravity = GravityFlags.CenterVertical;
                 tv.Clickable = true;
-                var lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
-                { RightMargin = Dui.Dp(8) };
-                row.AddView(tv, lp);
-                _chips[i] = tv;
+                tv.SetBackgroundDrawable(Widgets.RowRipple(12));
                 int idx = i;
-                tv.Click += (s, e) => Select(idx);
-                HamJi.Core.Touch.Press(tv, 0.94f);
+                tv.Click += (s, e) =>
+                {
+                    Select(idx, true);
+                    _pop?.Dismiss();
+                };
+                list.AddView(tv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, Dui.Dp(44)));
             }
-            AddView(row, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent));
-            for (int i = 0; i < _chips.Length; i++) Paint(i, false);
-        }
 
-        public void Select(int idx)
-        {
-            int old = _sel;
-            _sel = idx;
-            Paint(old, true);
-            Paint(idx, true);
-        }
+            var sv = new MaxHeightScrollView(Context) { MaxRatio = 0.3f };
+            sv.VerticalScrollBarEnabled = false;
+            sv.AddView(list, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent));
 
-        private void Paint(int idx, bool animate)
-        {
-            var tv = _chips[idx];
-            bool on = idx == _sel;
-            tv.SetBackgroundDrawable(Dui.Round(on ? Dui.Accent : Dui.ChipBg, 11));
-            tv.SetTextColor(new Color(on ? Color.White : Dui.TextSecondary));
-            tv.SetTypeface(on ? Dui.Medium : Dui.Regular, TypefaceStyle.Normal);
-            if (animate && on)
-            {
-                tv.ScaleX = 0.92f;
-                tv.ScaleY = 0.92f;
-                tv.Animate().ScaleX(1f).ScaleY(1f).SetDuration(170).SetInterpolator(new OvershootInterpolator(1.3f)).Start();
-            }
+            _pop = new PopupWindow(sv, Width, ViewGroup.LayoutParams.WrapContent);
+            _pop.SetBackgroundDrawable(Dui.Stroke(Dui.SheetBg, 16, Dui.CardBorder, 1));
+            _pop.OutsideTouchable = true;
+            _pop.Focusable = true;
+            _pop.Elevation = Dui.Dpf(12);
+            _pop.ShowAsDropDown(this, 0, Dui.Dp(6));
         }
     }
 }
