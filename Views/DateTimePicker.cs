@@ -11,9 +11,10 @@ namespace HamJi.Views
 {
     /// <summary>
     /// 底部弹出的选择器基类：
-    /// 1) Dialog 默认是浮动窄窗，Show 之后必须强制铺满宽度；
-    /// 2) 关闭时必须是「往下滑走」，所以统一走 windowExitAnimation；
-    /// 3) 支持从卡片上向下拖动关闭（带阻尼与回弹），向上拖动只给阻尼、不关闭。
+    /// 1) 窗口做成「全屏 + 卡片贴底」，卡片背景才能一直铺到物理屏幕底部，
+    ///    否则系统手势条那条区域会露出下面的新建页；
+    /// 2) 进出场动画自己做（卡片 TranslationY 只往下走），不用窗口动画，方向可控；
+    /// 3) 只能向下拖动关闭，向上一点都动不了。
     /// </summary>
     public abstract class BottomSheetDialog : Dialog
     {
@@ -21,8 +22,7 @@ namespace HamJi.Views
 
         private float _downRawY, _lastRawY, _vel;
         private long _lastT;
-        private bool _dragging;
-        private bool _dragAllowed;
+        private bool _dragging, _dragAllowed, _closing, _introDone;
         private int _slop;
 
         protected BottomSheetDialog(Context c) : base(c)
@@ -30,21 +30,56 @@ namespace HamJi.Views
             _slop = Dui.Dp(6);
         }
 
-        internal void AttachCard(LinearLayout card) { Card = card; }
+        internal void AttachCard(LinearLayout card)
+        {
+            Card = card;
+            card.AddOnLayoutChangeListener(new IntroWatcher(this));
+        }
 
         public override void Show()
         {
             base.Show();
-            try
-            {
-                var win = Window;
-                if (win != null)
-                {
-                    win.SetLayout(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
-                    win.SetWindowAnimations(Resource.Style.SheetDialogAnim);
-                }
-            }
+            try { Window?.SetLayout(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent); }
             catch { }
+        }
+
+        /// <summary>首次布局完成后把卡片从下方滑入。</summary>
+        internal void PlayIntro()
+        {
+            if (_introDone || Card == null || Card.Height <= 0) return;
+            _introDone = true;
+            Card.TranslationY = Card.Height;
+            Card.Animate().TranslationY(0f).SetDuration(240)
+                .SetInterpolator(new Android.Views.Animations.DecelerateInterpolator(1.5f)).Start();
+        }
+
+        private void DismissNow()
+        {
+            try { base.Dismiss(); } catch { }
+        }
+
+        /// <summary>关闭统一走这里：卡片先向下滑出，再真正消失。</summary>
+        public override void Dismiss()
+        {
+            if (_closing) return;
+            if (Card == null || Card.Height <= 0) { _closing = true; DismissNow(); return; }
+            _closing = true;
+            Card.Animate().Cancel();
+            Card.Animate().TranslationY(Card.Height).SetDuration(200)
+                .SetInterpolator(new Android.Views.Animations.AccelerateInterpolator(1.4f))
+                .WithEndAction(new Java.Lang.Runnable(() => DismissNow())).Start();
+        }
+
+        private sealed class IntroWatcher : Java.Lang.Object, View.IOnLayoutChangeListener
+        {
+            private readonly BottomSheetDialog _o;
+            public IntroWatcher(BottomSheetDialog o) { _o = o; }
+            public void OnLayoutChange(View v, int l, int t, int r, int b, int ol, int ot, int or, int ob)
+            {
+                if (b - t <= 0) return;
+                v.RemoveOnLayoutChangeListener(this);
+                _o.PlayIntro();
+            }
         }
 
         internal bool DragIntercept(MotionEvent e)
@@ -77,8 +112,8 @@ namespace HamJi.Views
                     return true;
 
                 case MotionEventActions.Move:
-                    float dy = e.RawY - _downRawY;
-                    if (dy < 0) dy *= 0.22f;          // 向上拖只给阻尼，不跟手
+                    // 只允许向下：向上拖一点都不跟手，卡片纹丝不动
+                    float dy = Math.Max(0f, e.RawY - _downRawY);
                     Card.TranslationY = dy;
                     long dt = e.EventTime - _lastT;
                     if (dt > 0) _vel = (e.RawY - _lastRawY) * 1000f / dt;
@@ -102,12 +137,6 @@ namespace HamJi.Views
                     return true;
             }
             return false;
-        }
-
-        /// <summary>拖动后卡片已经偏移，关闭动画要从当前位置继续往下滑。</summary>
-        public override void Dismiss()
-        {
-            base.Dismiss();
         }
     }
 
@@ -136,18 +165,25 @@ namespace HamJi.Views
             win.SetBackgroundDrawable(new ColorDrawable(Color.Transparent));
             win.AddFlags(WindowManagerFlags.DimBehind);
             win.SetDimAmount(0.45f);
-            // 让窗口一直铺到屏幕底部（包括手势条区域），否则卡片下方会露出一条没有背景的缝
-            win.SetFlags(WindowManagerFlags.LayoutNoLimits, WindowManagerFlags.LayoutNoLimits);
             if ((int)Android.OS.Build.VERSION.SdkInt >= 30)
             {
                 try { win.SetDecorFitsSystemWindows(false); } catch { }
             }
+            // 关键：窗口做成全屏。只要窗口是 wrap_content，系统就会把它顶在导航栏上方，
+            // 卡片下面必然露出一条能看见下层页面的透明缝。
             var lp = win.Attributes;
             lp.Gravity = GravityFlags.Bottom;
             lp.Width = ViewGroup.LayoutParams.MatchParent;
-            lp.Height = ViewGroup.LayoutParams.WrapContent;
+            lp.Height = ViewGroup.LayoutParams.MatchParent;
             win.Attributes = lp;
             dlg.SetCanceledOnTouchOutside(true);
+
+            var root = new FrameLayout(dlg.Context);
+            // 全屏窗口后「点外面关闭」要自己实现：上层铺一层透明可点区域
+            var scrim = new View(dlg.Context);
+            scrim.Clickable = true;
+            scrim.Click += (s, e) => dlg.Dismiss();
+            root.AddView(scrim, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent));
 
             var sheet = dlg as BottomSheetDialog;
             LinearLayout card = sheet != null ? new DragCard(dlg.Context, sheet) : Dui.VBox();
@@ -181,7 +217,9 @@ namespace HamJi.Views
             head.AddView(close, new LinearLayout.LayoutParams(Dui.Dp(32), Dui.Dp(32)));
             card.AddView(head, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent));
 
-            dlg.SetContentView(card);
+            dlg.SetContentView(root);
+            root.AddView(card, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent)
+            { Gravity = GravityFlags.Bottom });
             return card;
         }
 
