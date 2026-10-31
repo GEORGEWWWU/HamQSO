@@ -82,6 +82,7 @@ namespace HamJi.Views
         private float _downX, _lastX, _vel;
         private long _lastT;
         private int _downIndex;
+        private long _swallowUntil;
 
         public int Current => _current;
 
@@ -110,6 +111,13 @@ namespace HamJi.Views
             _spring = new Spring(x => { if (_indicator != null) _indicator.TranslationX = x; });
             _slopPx = Dui.Dp(6);
             Elevation = Dui.Dpf(14);
+        }
+
+        protected override void OnAttachedToWindow()
+        {
+            base.OnAttachedToWindow();
+            // 冷启动瞬间可能收到上一屏残留的触摸事件（会误切 tab），前 600ms 内忽略
+            _swallowUntil = Android.OS.SystemClock.UptimeMillis() + 600;
         }
 
         protected override void OnSizeChanged(int w, int h, int oldw, int oldh)
@@ -182,6 +190,7 @@ namespace HamJi.Views
             switch (e.ActionMasked)
             {
                 case MotionEventActions.Down:
+                    if (Android.OS.SystemClock.UptimeMillis() < _swallowUntil) return true;
                     _dragging = true;
                     _moved = false;
                     _downX = e.GetX();
