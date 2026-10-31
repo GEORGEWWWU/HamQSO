@@ -1,5 +1,3 @@
-# Ham记 · 业余无线电日记
-
 <div align="center">
 
 <img src="assets/logo-512.png" alt="Ham记" width="180" />
