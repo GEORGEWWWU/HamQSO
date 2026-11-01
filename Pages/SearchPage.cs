@@ -89,7 +89,7 @@ namespace HamJi.Pages
 
             _clearBtn = new FrameLayout(Context);
             _clearBtn.Clickable = true;
-            _clearBtn.Visibility = ViewStates.Invisible;
+            _clearBtn.Visibility = ViewStates.Gone;
             var ci = Dui.Icon(Resource.Drawable.ic_close, 12, Dui.TextTertiary);
             _clearBtn.AddView(ci, new FrameLayout.LayoutParams(Dui.Dp(12), Dui.Dp(12))
             { Gravity = GravityFlags.Center });
@@ -173,7 +173,8 @@ namespace HamJi.Pages
         {
             var t = _input?.Text ?? "";
             if (_clearBtn != null)
-                _clearBtn.Visibility = t.Length > 0 ? ViewStates.Visible : ViewStates.Invisible;
+                // 没有内容时整块让位（Gone 而不是 Invisible），否则会挤掉 hint 末尾的字
+                _clearBtn.Visibility = t.Length > 0 ? ViewStates.Visible : ViewStates.Gone;
 
             if (t == _query) return;
             _query = t;
