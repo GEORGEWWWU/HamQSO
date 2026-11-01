@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Android.Content;
 using Android.Graphics;
+using Android.Graphics.Drawables;
 using Android.Text;
 using Android.Views;
 using Android.Views.InputMethods;
@@ -26,9 +27,12 @@ namespace HamJi.Pages
         private ImageView _dateIcon;
         private LinearLayout _filterWrap;
         private TextView _filterLabel;
+        private LinearLayout _kindPill;
+        private TextView _kindLabel;
 
         private DateTime? _date;
         private string _query = "";
+        private int _kind = -1;   // -1 全部 / 0 通联频率 / 1 通联日志
 
         public SearchPage(Context c) : base(c)
         {
@@ -99,12 +103,29 @@ namespace HamJi.Pages
             box.AddView(row, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent));
 
-            // 已选日期的标签（没筛选时不占位置）
+            // 分类下拉 + 已选日期标签（同一行，省空间；分类常驻，日期只在筛选中出现）
+            var tools = Dui.HBox();
+
+            var kindPill = Dui.HBox();
+            kindPill.Clickable = true;
+            kindPill.Focusable = true;
+            kindPill.SetPadding(Dui.Dp(10), 0, Dui.Dp(7), 0);
+            kindPill.SetMinimumHeight(Dui.Dp(28));
+            _kindLabel = Dui.Label("全部", 11.5f, Dui.TextSecondary, true);
+            kindPill.AddView(_kindLabel);
+            var kch = Dui.Icon(Resource.Drawable.ic_chevron, 10, Dui.TextTertiary);
+            kch.Rotation = 90f;
+            kindPill.AddView(kch, new LinearLayout.LayoutParams(Dui.Dp(10), Dui.Dp(10))
+            { LeftMargin = Dui.Dp(3) });
+            HamJi.Core.Touch.Bind(kindPill, () => ShowKindMenu(kindPill), 0.95f);
+            _kindPill = kindPill;
+            tools.AddView(kindPill, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WrapContent, Dui.Dp(28)));
+
+            tools.AddView(new View(Context), new LinearLayout.LayoutParams(0, 1, 1f));
+
             _filterWrap = Dui.HBox();
             _filterWrap.Visibility = ViewStates.Gone;
-            var fplp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
-            { TopMargin = Dui.Dp(10) };
 
             var pill = Dui.HBox();
             pill.Clickable = true;
@@ -121,7 +142,14 @@ namespace HamJi.Pages
             HamJi.Core.Touch.Bind(pill, OpenDatePicker, 0.96f);
             _filterWrap.AddView(pill);
 
-            box.AddView(_filterWrap, fplp);
+            tools.AddView(_filterWrap, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent));
+
+            box.AddView(tools, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent)
+            { TopMargin = Dui.Dp(10) });
+
+            UpdateKindPill();
 
             _input.TextChanged += OnQueryChanged;
             return box;
@@ -179,6 +207,77 @@ namespace HamJi.Pages
                 _filterLabel.Text = DayLabel(_date.Value);
         }
 
+        /// <summary>分类下拉：全部 / 通联频率 / 通联日志。用小尺寸自绘弹层，和 App 风格一致。</summary>
+        private void ShowKindMenu(View anchor)
+        {
+            HideKeyboard();
+
+            var items = new[] { "全部", "通联频率", "通联日志" };
+            var values = new[] { -1, 0, 1 };
+
+            var box = Dui.VBox();
+            box.SetPadding(Dui.Dp(6), Dui.Dp(6), Dui.Dp(6), Dui.Dp(6));
+            box.SetBackgroundDrawable(Dui.Round(Dui.SheetBg, 12));
+            box.Elevation = Dui.Dpf(12);
+            box.ClipToOutline = true;
+            box.OutlineProvider = ViewOutlineProvider.Background;
+
+            PopupWindow pop = null;
+            for (int i = 0; i < items.Length; i++)
+            {
+                int value = values[i];
+                bool on = value == _kind;
+
+                var row = Dui.HBox();
+                row.SetPadding(Dui.Dp(8), 0, Dui.Dp(8), 0);
+                row.Clickable = true;
+                row.Focusable = true;
+                row.SetBackgroundDrawable(Dui.Ripple(
+                    Dui.WithAlpha(Dui.Accent, 40), Dui.Round(Color.Transparent, 8)));
+
+                var tv = Dui.Label(items[i], 12.5f, on ? Dui.Accent : Dui.TextPrimary, on);
+                row.AddView(tv, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f));
+
+                if (on)
+                {
+                    var ck = Dui.Icon(Resource.Drawable.ic_check, 12, Dui.Accent);
+                    row.AddView(ck, new LinearLayout.LayoutParams(Dui.Dp(12), Dui.Dp(12))
+                    { LeftMargin = Dui.Dp(6) });
+                }
+
+                row.Click += (s, e) =>
+                {
+                    pop?.Dismiss();
+                    if (_kind == value) return;
+                    _kind = value;
+                    UpdateKindPill();
+                    Reload();
+                };
+
+                box.AddView(row, new LinearLayout.LayoutParams(Dui.Dp(124), Dui.Dp(34)));
+            }
+
+            pop = new PopupWindow(box, Dui.Dp(136), ViewGroup.LayoutParams.WrapContent);
+            pop.SetBackgroundDrawable(new ColorDrawable(Color.Transparent));
+            pop.OutsideTouchable = true;
+            pop.Focusable = true;
+            pop.Elevation = Dui.Dpf(10);
+            pop.ShowAsDropDown(anchor, 0, Dui.Dp(6));
+        }
+
+        private void UpdateKindPill()
+        {
+            if (_kindPill == null) return;
+            bool on = _kind != -1;
+            if (_kindLabel != null)
+            {
+                _kindLabel.Text = _kind == 0 ? "通联频率" : _kind == 1 ? "通联日志" : "全部";
+                _kindLabel.SetTextColor(new Color(on ? Dui.Accent : Dui.TextSecondary));
+            }
+            _kindPill.SetBackgroundDrawable(Dui.Round(
+                on ? Dui.WithAlpha(Dui.Accent, Dui.Dark ? 58 : 30) : Dui.InputBg, 14));
+        }
+
         private void HideKeyboard()
         {
             try
@@ -204,7 +303,7 @@ namespace HamJi.Pages
             bool hasQuery = q.Length > 0;
             bool hasDate = _date.HasValue;
 
-            if (!hasQuery && !hasDate)
+            if (!hasQuery && !hasDate && _kind == -1)
             {
                 ListHost.AddView(Widgets.EmptyState(Resource.Drawable.ic_search,
                     "搜索通联记录",
@@ -229,14 +328,27 @@ namespace HamJi.Pages
                 return;
             }
 
+            // 分类筛选：只留下选中的那一段
+            int wantFreq = _kind == 1 ? 0 : freq.Count;
+            int wantLog = _kind == 0 ? 0 : log.Count;
+            if (wantFreq + wantLog == 0)
+            {
+                ListHost.AddView(Widgets.EmptyState(Resource.Drawable.ic_search,
+                    "这个分类里没有记录",
+                    "切到「全部」看看另一类记录"));
+                return;
+            }
+
             SortByTime(freq);
             SortByTime(log);
 
             int shown = 0;
-            shown += RenderSection("通联频率", Resource.Drawable.ic_freq, freq, hasDate, shown);
-            shown += RenderSection("通联日志", Resource.Drawable.ic_log, log, hasDate, shown);
+            if (_kind != 1)
+                shown += RenderSection("通联频率", Resource.Drawable.ic_freq, freq, hasDate, shown);
+            if (_kind != 0)
+                shown += RenderSection("通联日志", Resource.Drawable.ic_log, log, hasDate, shown);
 
-            if (freq.Count + log.Count > shown)
+            if (wantFreq + wantLog > shown)
             {
                 var more = Dui.Label("结果较多，仅显示最新的 " + shown + " 条，输入更精确的关键词可缩小范围",
                     11.5f, Dui.TextTertiary, false);

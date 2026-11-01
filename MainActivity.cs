@@ -256,7 +256,8 @@ namespace HamJi
             _nav.Content = page;
             _current = idx;
             _nav.Select(idx, animate);
-            SetFabVisible(idx != 3, animate);
+            // 搜索页与设置页不显示新建按钮（搜索页顶部就是搜索框，右下角再放 + 会碍事）
+            SetFabVisible(idx == 0 || idx == 1, animate);
             SetCloudVisible(idx != 2 && idx != 3, animate);
             _root.Post(() => _nav.RefreshBlur());
             _root.PostDelayed(() => _nav.RefreshBlur(), 320);
@@ -287,7 +288,7 @@ namespace HamJi
                 if (animate)
                 {
                     _fab.Animate().Alpha(0f).SetDuration(140)
-                        .WithEndAction(new Java.Lang.Runnable(() => { if (_current == 3) _fab.Visibility = ViewStates.Gone; }))
+                        .WithEndAction(new Java.Lang.Runnable(() => { if (_current >= 2) _fab.Visibility = ViewStates.Gone; }))
                         .Start();
                 }
                 else
