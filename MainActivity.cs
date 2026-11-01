@@ -31,12 +31,15 @@ namespace HamJi
         private BackdropView _backdrop;
         private FrameLayout _content;
         private Fab _fab;
-        private RoundIconButton _cloud;
         private NavBar _nav;
 
-        private readonly BasePage[] _pages = new BasePage[4];
+        private readonly BasePage[] _pages = new BasePage[3];
         private BasePage _currentPage;
         private int _current = -1;
+
+        // 搜索是二级页：整层压在 tab 页与导航之上，返回即销毁
+        private FrameLayout _searchLayer;
+        private SearchPage _searchPage;
 
         private int _topInset;
         private int _bottomInset;
@@ -162,16 +165,6 @@ namespace HamJi
             _content = new FrameLayout(this);
             _root.AddView(_content, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent));
 
-            _cloud = new RoundIconButton(this, Resource.Drawable.ic_cloud_upload);
-            var cloudLp = new FrameLayout.LayoutParams(Dui.Dp(46), Dui.Dp(46))
-            {
-                Gravity = GravityFlags.Top | GravityFlags.Right,
-                RightMargin = Dui.Dp(20),
-                TopMargin = Dui.Dp(20)
-            };
-            _root.AddView(_cloud, cloudLp);
-            _cloud.Click += (s2, e2) => Toast.MakeText(this, "云同步入口已预留，功能开发中", ToastLength.Short).Show();
-
             _fab = new Fab(this);
             var fabLp = new FrameLayout.LayoutParams(Dui.Dp(58), Dui.Dp(58))
             {
@@ -216,11 +209,8 @@ namespace HamJi
             fabLp.BottomMargin = bottom + Dui.Dp(10) + Dui.Dp(66) + Dui.Dp(14);
             _fab.LayoutParameters = fabLp;
 
-            var cloudLp = (FrameLayout.LayoutParams)_cloud.LayoutParameters;
-            cloudLp.TopMargin = top + Dui.Dp(14);
-            _cloud.LayoutParameters = cloudLp;
-
             _currentPage?.ApplyInsets(_topInset, NavSpace());
+            _searchPage?.ApplyInsets(_topInset, _bottomInset + Dui.Dp(18));
             _root.Post(() => _nav.RefreshBlur());
         }
 
@@ -229,7 +219,7 @@ namespace HamJi
 
         private void ShowPage(int idx, bool animate)
         {
-            if (idx < 0 || idx > 3) return;
+            if (idx < 0 || idx > 2) return;
             if (_current == idx && _currentPage != null && _currentPage.Parent != null) return;
 
             var page = _pages[idx];
@@ -256,9 +246,8 @@ namespace HamJi
             _nav.Content = page;
             _current = idx;
             _nav.Select(idx, animate);
-            // 搜索页与设置页不显示新建按钮（搜索页顶部就是搜索框，右下角再放 + 会碍事）
+            // 设置页不显示新建按钮（频率 / 日志页才需要 +）
             SetFabVisible(idx == 0 || idx == 1, animate);
-            SetCloudVisible(idx != 2 && idx != 3, animate);
             _root.Post(() => _nav.RefreshBlur());
             _root.PostDelayed(() => _nav.RefreshBlur(), 320);
         }
@@ -267,7 +256,6 @@ namespace HamJi
         {
             if (idx == 0) return new FrequencyPage(this);
             if (idx == 1) return new LogPage(this);
-            if (idx == 2) return new SearchPage(this);
             var s = new SettingsPage(this);
             s.Navigate += target => ShowPage(target, true);
             return s;
@@ -299,29 +287,84 @@ namespace HamJi
             }
         }
 
-        private void SetCloudVisible(bool visible, bool animate)
+        /// <summary>打开搜索二级页：整层压在 tab 页与底部导航之上，从右侧轻微滑入。</summary>
+        internal void OpenSearch()
         {
-            _cloud.ScaleX = 1f;
-            _cloud.ScaleY = 1f;
-            if (visible)
+            if (_searchPage != null) return;
+
+            var layer = new FrameLayout(this);
+            layer.Clickable = true;
+            layer.Focusable = true;
+            // 导航栏与 FAB 都带 elevation，只靠 addView 顺序压不住，抬高层级一并解决点击穿透
+            layer.Elevation = Dui.Dpf(40);
+
+            // 自带一份背景，否则会透出下面 tab 页的内容
+            var bg = new BackdropView(this);
+            layer.AddView(bg, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent));
+
+            var page = new SearchPage(this);
+            page.BackRequested += CloseSearch;
+            page.ApplyInsets(_topInset, _bottomInset + Dui.Dp(18));
+            page.Refresh();
+            layer.AddView(page, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent));
+
+            _searchLayer = layer;
+            _searchPage = page;
+            // 二级页整屏接管：底部导航与新建按钮让位
+            _fab.Visibility = ViewStates.Gone;
+            _nav.Visibility = ViewStates.Invisible;
+            _root.AddView(layer, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent));
+
+            float from = _root.Width > 0 ? _root.Width * 0.16f : Dui.Dpf(60);
+            layer.TranslationX = from;
+            layer.Alpha = 0f;
+            layer.Animate().TranslationX(0f).Alpha(1f).SetDuration(240)
+                .SetInterpolator(new DecelerateInterpolator()).Start();
+        }
+
+        internal void CloseSearch()
+        {
+            var layer = _searchLayer;
+            var page = _searchPage;
+            _searchLayer = null;
+            _searchPage = null;
+            if (layer == null) return;
+
+            try
             {
-                _cloud.Visibility = ViewStates.Visible;
-                _cloud.Alpha = 1f;
+                if (page != null && page.InputView != null)
+                {
+                    var imm = GetSystemService(InputMethodService) as Android.Views.InputMethods.InputMethodManager;
+                    imm?.HideSoftInputFromWindow(page.InputView.WindowToken, 0);
+                    page.InputView.ClearFocus();
+                }
             }
-            else
+            catch { }
+
+            layer.Animate().TranslationX(_root.Width > 0 ? _root.Width * 0.12f : Dui.Dpf(50))
+                .Alpha(0f).SetDuration(170)
+                .SetInterpolator(new AccelerateInterpolator())
+                .WithEndAction(new Java.Lang.Runnable(() =>
+                {
+                    try { _root.RemoveView(layer); } catch { }
+                    _nav.Visibility = ViewStates.Visible;
+                    SetFabVisible(_current == 0 || _current == 1, false);
+                    _root.Post(() => _nav.RefreshBlur());
+                }))
+                .Start();
+        }
+
+        public override void OnBackPressed()
+        {
+            if (_searchPage != null)
             {
-                if (animate)
-                {
-                    _cloud.Animate().Alpha(0f).SetDuration(140)
-                        .WithEndAction(new Java.Lang.Runnable(() => { if (_current == 2 || _current == 3) _cloud.Visibility = ViewStates.Gone; }))
-                        .Start();
-                }
-                else
-                {
-                    _cloud.Alpha = 0f;
-                    _cloud.Visibility = ViewStates.Gone;
-                }
+                CloseSearch();
+                return;
             }
+            base.OnBackPressed();
         }
 
         private void OpenNew()
@@ -383,7 +426,11 @@ namespace HamJi
 
         private void OnStoreChanged()
         {
-            _root?.Post(() => _currentPage?.Refresh());
+            _root?.Post(() =>
+            {
+                _currentPage?.Refresh();
+                _searchPage?.Refresh();
+            });
         }
 
         private void OnStoreError(string msg)

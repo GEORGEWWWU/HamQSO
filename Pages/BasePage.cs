@@ -15,6 +15,8 @@ namespace HamJi.Pages
         protected readonly LinearLayout Header;
         protected readonly TextView TitleView;
         protected readonly TextView SubtitleView;
+        /// <summary>标题行右侧的图标入口容器（搜索 / 云同步等）。</summary>
+        protected readonly LinearLayout ActionsHost;
         protected readonly ScrollView Scroller;
         protected readonly LinearLayout ListHost;
         protected bool ShowHeader = true;
@@ -31,9 +33,22 @@ namespace HamJi.Pages
             Orientation = Orientation.Vertical;
 
             Header = Dui.VBox();
+
+            // 主标题与右侧图标入口同一行：入口只跟主标题对齐，不跟着副标题往下沉
+            var titleRow = Dui.HBox();
             TitleView = Dui.Label("", 27f, Dui.TextPrimary, true);
             TitleView.LetterSpacing = -0.02f;
-            Header.AddView(TitleView, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent));
+            TitleView.SetSingleLine(true);
+            TitleView.Ellipsize = Android.Text.TextUtils.TruncateAt.End;
+            titleRow.AddView(TitleView, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WrapContent, 1f));
+
+            ActionsHost = Dui.HBox();
+            titleRow.AddView(ActionsHost, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent));
+
+            Header.AddView(titleRow, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent));
 
             SubtitleView = Dui.Label("", 12.5f, Dui.TextSecondary, false);
             var slp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
@@ -73,6 +88,31 @@ namespace HamJi.Pages
                 Header.Visibility = ViewStates.Gone;
             }
             ListHost.SetPadding(Dui.Dp(16), ShowHeader ? 0 : _insetTop + Dui.Dp(10), Dui.Dp(16), _insetBottom);
+        }
+
+        /// <summary>在标题行右侧加一个纯图标入口（无底色/无阴影/无边框）。</summary>
+        protected IconAction AddHeaderAction(int iconRes, Action onClick, float iconDp = 21f, float boxDp = 32f)
+        {
+            var btn = new IconAction(Context, iconRes, (int)iconDp, (int)boxDp);
+            var lp = new LinearLayout.LayoutParams(Dui.Dp(boxDp), Dui.Dp(boxDp))
+            { LeftMargin = Dui.Dp(6) };
+            ActionsHost.AddView(btn, lp);
+            btn.Click += (s, e) => onClick();
+            return btn;
+        }
+
+        /// <summary>通联频率 / 通联日志页右上角固定的两个入口，顺序：搜索、云同步。</summary>
+        protected void AddHeaderEntries()
+        {
+            AddHeaderAction(Resource.Drawable.ic_search, OpenSearch);
+            AddHeaderAction(Resource.Drawable.ic_cloud_upload, () =>
+                Toast.MakeText(Context, "云同步入口已预留，功能开发中", ToastLength.Short).Show());
+        }
+
+        /// <summary>搜索是二级页：压在 tab 页之上，返回即关闭。</summary>
+        protected void OpenSearch()
+        {
+            if (Context is MainActivity act) act.OpenSearch();
         }
 
         public void Refresh()

@@ -67,7 +67,7 @@ namespace HamJi.Views
     {
         public event Action<int> Selected;
 
-        private readonly NavItemView[] _items = new NavItemView[4];
+        private readonly NavItemView[] _items = new NavItemView[3];
         private readonly View _indicator;
         private readonly LinearLayout _row;
         private readonly Spring _spring;
@@ -106,8 +106,7 @@ namespace HamJi.Views
             _row.SetClipChildren(false);
             _items[0] = new NavItemView(c, Resource.Drawable.ic_freq, "通联频率", 0);
             _items[1] = new NavItemView(c, Resource.Drawable.ic_log, "通联日志", 1);
-            _items[2] = new NavItemView(c, Resource.Drawable.ic_search, "搜索", 2);
-            _items[3] = new NavItemView(c, Resource.Drawable.ic_settings, "设置", 3);
+            _items[2] = new NavItemView(c, Resource.Drawable.ic_settings, "设置", 2);
             foreach (var it in _items)
                 _row.AddView(it, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MatchParent, 1f));
             AddView(_row, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent));
@@ -127,7 +126,7 @@ namespace HamJi.Views
         protected override void OnSizeChanged(int w, int h, int oldw, int oldh)
         {
             base.OnSizeChanged(w, h, oldw, oldh);
-            _itemW = w / 4f;
+            _itemW = w / 3f;
             _iw = Math.Max(Dui.Dp(64), _itemW - Dui.Dp(10));
             _ih = Math.Max(Dui.Dp(40), h - Dui.Dp(12));
             ApplyIndicatorGeometry();
@@ -182,12 +181,12 @@ namespace HamJi.Views
         private int IndexAt(float x)
         {
             int i = (int)Math.Floor(x / Math.Max(1, _itemW));
-            return Math.Max(0, Math.Min(3, i));
+            return Math.Max(0, Math.Min(2, i));
         }
 
         public void Select(int index, bool animate)
         {
-            if (index < 0 || index > 3) return;
+            if (index < 0 || index > 2) return;
             if (index != _current)
             {
                 _current = index;
@@ -201,7 +200,7 @@ namespace HamJi.Views
 
         private void Settle(int index, bool animate)
         {
-            index = Math.Max(0, Math.Min(3, index));
+            index = Math.Max(0, Math.Min(2, index));
             bool changed = index != _current;
             int old = _current;
             _current = index;
@@ -228,13 +227,13 @@ namespace HamJi.Views
         {
             float center = _indicator.TranslationX + _iw / 2f;
             int nearest = (int)Math.Round((center - _itemW / 2f) / Math.Max(1, _itemW));
-            nearest = Math.Max(0, Math.Min(3, nearest));
+            nearest = Math.Max(0, Math.Min(2, nearest));
 
             // 快速甩动时按方向推进，模拟 iOS 26 的 flick 手感
             if (Math.Abs(velocity) > Dui.Dp(700))
             {
                 int dir = velocity > 0 ? 1 : -1;
-                int flicked = Math.Max(0, Math.Min(3, _downIndex + dir));
+                int flicked = Math.Max(0, Math.Min(2, _downIndex + dir));
                 if (flicked != nearest) nearest = flicked;
             }
             return nearest;
@@ -386,23 +385,32 @@ namespace HamJi.Views
         }
     }
 
-    /// <summary>悬浮圆形图标按钮（云上传等次级入口）。</summary>
-    public class RoundIconButton : FrameLayout
+    /// <summary>
+    /// 标题右侧的图标入口：无底色、无阴影、无边框，只有图标本体，直接融进页面背景。
+    /// 尺寸刻意做小，并让盒子高度贴住主标题那一行，不跨到副标题上。
+    /// </summary>
+    public class IconAction : FrameLayout
     {
-        public RoundIconButton(Context c, int iconRes) : base(c)
+        private readonly ImageView _icon;
+
+        public IconAction(Context c, int iconRes, int iconDp = 21, int boxDp = 32) : base(c)
         {
             Clickable = true;
             Focusable = true;
+            Elevation = 0f;
+            SetBackgroundColor(Color.Transparent);
 
-            var bg = Dui.Round(Dui.WithAlpha(Dui.CardBg, 235), 23);
-            Background = bg;
-            ClipToOutline = true;
-            OutlineProvider = ViewOutlineProvider.Background;
-            Elevation = Dui.Dpf(8);
-
-            var icon = Dui.Icon(iconRes, 22, Dui.Accent);
-            AddView(icon, new FrameLayout.LayoutParams(Dui.Dp(22), Dui.Dp(22)) { Gravity = GravityFlags.Center });
-            HamJi.Core.Touch.Press(this, 0.9f);
+            _icon = Dui.Icon(iconRes, iconDp, Dui.TextSecondary);
+            AddView(_icon, new FrameLayout.LayoutParams(Dui.Dp(iconDp), Dui.Dp(iconDp))
+            { Gravity = GravityFlags.Center });
+            HamJi.Core.Touch.Press(this, 0.86f);
         }
+
+        public ImageView Icon => _icon;
+
+        public void Tint(int color) => _icon.SetColorFilter(new Color(color));
+
+        /// <summary>把图标旋转指定角度（复用同一个 chevron 画返回箭头等）。</summary>
+        public void Rotate(float deg) => _icon.Rotation = deg;
     }
 }

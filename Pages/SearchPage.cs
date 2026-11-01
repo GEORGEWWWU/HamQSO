@@ -21,6 +21,12 @@ namespace HamJi.Pages
     {
         private const int MaxResults = 200;
 
+        /// <summary>点左上角返回箭头 / 系统返回键时触发（由宿主关闭二级页）。</summary>
+        public event Action BackRequested;
+
+        /// <summary>供宿主收起输入法用。</summary>
+        public EditText InputView => _input;
+
         private EditText _input;
         private FrameLayout _clearBtn;
         private FrameLayout _dateBtn;
@@ -49,6 +55,14 @@ namespace HamJi.Pages
             var box = Dui.VBox();
 
             var row = Dui.HBox();
+
+            // 返回：二级页专用，复用 chevron 转 180°
+            var back = new IconAction(Context, Resource.Drawable.ic_chevron, 19, 30);
+            back.Rotate(180f);
+            back.Tint(Dui.TextPrimary);
+            back.Click += (s, e) => { HideKeyboard(); BackRequested?.Invoke(); };
+            row.AddView(back, new LinearLayout.LayoutParams(Dui.Dp(30), Dui.Dp(30))
+            { RightMargin = Dui.Dp(4) });
 
             // 搜索框
             var field = Dui.HBox();

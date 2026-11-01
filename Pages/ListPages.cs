@@ -11,7 +11,7 @@ namespace HamJi.Pages
 {
     public class FrequencyPage : BasePage
     {
-        public FrequencyPage(Context c) : base(c) { }
+        public FrequencyPage(Context c) : base(c) { AddHeaderEntries(); }
 
         protected override void OnBuild()
         {
@@ -80,7 +80,7 @@ namespace HamJi.Pages
 
     public class LogPage : BasePage
     {
-        public LogPage(Context c) : base(c) { }
+        public LogPage(Context c) : base(c) { AddHeaderEntries(); }
 
         protected override void OnBuild()
         {
