@@ -11,7 +11,7 @@
 
 <p>
 <a href="https://github.com/GEORGEWWWU/HamQSO/releases/latest"><img src="https://img.shields.io/badge/下载-APK-1F6BFF?style=for-the-badge&logo=android&logoColor=white" alt="下载 APK" /></a>
-<a href="https://github.com/GEORGEWWWU/HamQSO/releases/latest"><img src="https://img.shields.io/badge/版本-v1.0.1-0B44C9?style=for-the-badge" alt="版本" /></a>
+<a href="https://github.com/GEORGEWWWU/HamQSO/releases/latest"><img src="https://img.shields.io/badge/版本-v1.0.2-0B44C9?style=for-the-badge" alt="版本" /></a>
 <a href="#快速开始"><img src="https://img.shields.io/badge/平台-Android%205.0+-17924F?style=for-the-badge" alt="平台" /></a>
 <a href="#项目结构"><img src="https://img.shields.io/badge/依赖-零%20AndroidX-23272E?style=for-the-badge" alt="依赖" /></a>
 </p>
@@ -91,6 +91,11 @@ NewRecordActivity.cs  底部弹层式新建 / 编辑页
 ```
 
 ## 变更记录
+
+### v1.0.2
+
+- **按天折叠**：通联频率 / 通联日志页的每一天都可点击折叠，右侧细线小三角随状态旋转
+- 条数计数改为日期标题旁的浅色标签；列表折叠 / 展开带高度过渡动画，可随时点击打断
 
 ### v1.0.1
 

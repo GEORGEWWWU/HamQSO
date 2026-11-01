@@ -19,6 +19,8 @@ namespace HamJi.Pages
         protected readonly LinearLayout ListHost;
         protected bool ShowHeader = true;
         private SwipeRow _openRow;
+        /// <summary>被收起的日期（跨 Refresh 保留折叠状态）。</summary>
+        private readonly HashSet<DateTime> _collapsedDays = new HashSet<DateTime>();
         private int _insetTop;
         private int _insetBottom;
         private bool _insetsKnown;
@@ -129,7 +131,13 @@ namespace HamJi.Pages
                 else if (day.Year == today.Year) { label = day.ToString("M月d日"); }
                 else { label = day.ToString("yyyy年M月d日"); }
 
-                ListHost.AddView(Widgets.DayHeader(label, extra, g.Count()));
+                var dayKey = day;
+                var group = new DayGroup(Context, label, extra, g.Count(), !_collapsedDays.Contains(dayKey));
+                group.Toggled += (grp, expanded) =>
+                {
+                    if (expanded) _collapsedDays.Remove(dayKey);
+                    else _collapsedDays.Add(dayKey);
+                };
 
                 foreach (var rec in g)
                 {
@@ -146,8 +154,9 @@ namespace HamJi.Pages
                         _openRow = null;
                         Refresh();
                     };
-                    ListHost.AddView(swipe);
+                    group.Body.AddView(swipe);
                 }
+                ListHost.AddView(group);
             }
         }
 

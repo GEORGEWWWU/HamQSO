@@ -21,30 +21,6 @@ namespace HamJi.Views
             return tv;
         }
 
-        public static LinearLayout DayHeader(string day, string extra, int count)
-        {
-            var row = Dui.HBox();
-            row.LayoutParameters = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
-            row.SetPadding(Dui.Dp(8), Dui.Dp(14), Dui.Dp(8), Dui.Dp(7));
-
-            var left = Dui.Label(day, 12.5f, Dui.TextSecondary, true);
-            left.LetterSpacing = 0.06f;
-            row.AddView(left);
-
-            if (!string.IsNullOrEmpty(extra))
-            {
-                var mid = Dui.Label(" · " + extra, 12.5f, Dui.TextTertiary, false);
-                row.AddView(mid);
-            }
-
-            row.AddView(new View(Dui.Ctx), new LinearLayout.LayoutParams(0, 1, 1f));
-
-            var cnt = Dui.Label(count + " 条", 11f, Dui.TextTertiary, false);
-            cnt.LetterSpacing = 0.03f;
-            row.AddView(cnt);
-            return row;
-        }
-
         public static LinearLayout Card()
         {
             var card = Dui.VBox();
