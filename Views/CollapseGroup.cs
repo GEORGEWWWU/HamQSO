@@ -9,7 +9,7 @@ using HamJi.Core;
 
 namespace HamJi.Views
 {
-    /// <summary>细线小三角：折叠指示器。收起时朝右（0°），展开时旋转 90° 朝下。</summary>
+    /// <summary>细线小箭头「&gt;」：收起时朝右（0°），展开时旋转 90° 朝下。</summary>
     public class CaretView : View
     {
         private readonly Paint _paint;
@@ -31,22 +31,19 @@ namespace HamJi.Views
             float cx = Width / 2f, cy = Height / 2f;
             if (cx <= 0 || cy <= 0) return;
 
-            // 三角形重心落在控件中心，旋转时不会左右/上下漂移
-            float baseX = cx - Dui.Dpf(1.45f);
-            float apexX = cx + Dui.Dpf(2.9f);
-            float halfH = Dui.Dpf(3.9f);
+            float dx = Dui.Dpf(2.2f);
+            float dy = Dui.Dpf(4.2f);
 
             _path.Reset();
-            _path.MoveTo(baseX, cy - halfH);
-            _path.LineTo(apexX, cy);
-            _path.LineTo(baseX, cy + halfH);
-            _path.Close();
+            _path.MoveTo(cx - dx, cy - dy);
+            _path.LineTo(cx + dx, cy);
+            _path.LineTo(cx - dx, cy + dy);
             canvas.DrawPath(_path, _paint);
         }
     }
 
     /// <summary>
-    /// 一天的分组：日期标题 + 条数标签 + 折叠三角，下面是记录列表。
+    /// 一天的分组：日期标题 + 条数标签 + 折叠箭头，下面是记录列表。
     /// 列表高度做过渡动画，动画可被下一次点击打断（从当前高度继续走）。
     /// </summary>
     public class DayGroup : LinearLayout
@@ -128,7 +125,7 @@ namespace HamJi.Views
             _expanded = expand;
             RotateCaret(expand, animate);
 
-            if (!animate || !IsLaidOut || _body.Width <= 0)
+            if (!animate || _body.Width <= 0)
             {
                 _body.ForcedHeight = expand ? -1 : 0;
                 _body.RequestLayout();
@@ -172,7 +169,7 @@ namespace HamJi.Views
             va.Update += (s, e) =>
             {
                 if (gen != _gen) return;
-                float f = e.Animation.AnimatedFraction;
+                float f = va.AnimatedFraction;
                 _body.ForcedHeight = (int)Math.Round(from + (to - from) * f);
                 _body.RequestLayout();
             };
@@ -185,6 +182,13 @@ namespace HamJi.Views
             };
             _anim = va;
             va.Start();
+        }
+
+        /// <summary>行被回收（换成占位）后，列表高度可能变，需要重新量一次。</summary>
+        public void InvalidateBody()
+        {
+            if (_body.ForcedHeight >= 0) _body.ForcedHeight = _expanded ? -1 : 0;
+            _body.RequestLayout();
         }
 
         protected override void OnDetachedFromWindow()
@@ -205,24 +209,55 @@ namespace HamJi.Views
         {
             public int ForcedHeight = -1;
 
+            // 自然高度缓存：滚动时每加一块都会重新布局，别每次都把几十行重量一遍
+            private int _natW = -1;
+            private int _natCount = -1;
+            private int _natH = -1;
+
             public ClipBox(Context c) : base(c) { Orientation = Orientation.Vertical; }
 
+            /// <summary>量出「完全展开」时的高度。注意必须临时解除 ForcedHeight，
+            /// 否则收起态（0）会把自然高度也量成 0，展开动画就退化成瞬间跳变。</summary>
             public int MeasureNatural()
             {
+                int keep = ForcedHeight;
+                ForcedHeight = -1;
                 int w = Width;
-                if (w <= 0)
-                    w = Context.Resources.DisplayMetrics.WidthPixels;
+                if (w <= 0) w = Context.Resources.DisplayMetrics.WidthPixels;
                 Measure(MeasureSpec.MakeMeasureSpec(w, MeasureSpecMode.Exactly),
                         MeasureSpec.MakeMeasureSpec(0, MeasureSpecMode.Unspecified));
-                return MeasuredHeight;
+                int h = MeasuredHeight;
+                ForcedHeight = keep;
+                return h;
+            }
+
+            public override void OnViewAdded(View child)
+            {
+                base.OnViewAdded(child);
+                _natH = -1;
+            }
+
+            public override void OnViewRemoved(View child)
+            {
+                base.OnViewRemoved(child);
+                _natH = -1;
             }
 
             protected override void OnMeasure(int widthMeasureSpec, int heightMeasureSpec)
             {
+                int w = MeasureSpec.GetSize(widthMeasureSpec);
+                if (_natH >= 0 && _natW == w && _natCount == ChildCount)
+                {
+                    SetMeasuredDimension(w, ForcedHeight >= 0 ? ForcedHeight : _natH);
+                    return;
+                }
+
                 base.OnMeasure(widthMeasureSpec,
                     MeasureSpec.MakeMeasureSpec(0, MeasureSpecMode.Unspecified));
-                if (ForcedHeight >= 0)
-                    SetMeasuredDimension(MeasuredWidth, ForcedHeight);
+                _natW = w;
+                _natCount = ChildCount;
+                _natH = MeasuredHeight;
+                SetMeasuredDimension(MeasuredWidth, ForcedHeight >= 0 ? ForcedHeight : _natH);
             }
         }
     }

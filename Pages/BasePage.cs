@@ -21,6 +21,7 @@ namespace HamJi.Pages
         private SwipeRow _openRow;
         /// <summary>被收起的日期（跨 Refresh 保留折叠状态）。</summary>
         private readonly HashSet<DateTime> _collapsedDays = new HashSet<DateTime>();
+        private LazyGroupList _lazy;
         private int _insetTop;
         private int _insetBottom;
         private bool _insetsKnown;
@@ -76,6 +77,8 @@ namespace HamJi.Pages
 
         public void Refresh()
         {
+            _lazy?.Detach();
+            _lazy = null;
             ListHost.RemoveAllViews();
             OnBuild();
             if (_insetsKnown) ApplyChrome();
@@ -121,43 +124,49 @@ namespace HamJi.Pages
             }
 
             var today = DateTime.Today;
+            var plans = new List<LazyGroupList.DayPlan>();
             foreach (var g in items.GroupBy(x => x.LocalTime.Date))
             {
                 var day = g.Key;
                 string label;
-                string extra = null;
                 if (day == today) label = "今天";
                 else if (day == today.AddDays(-1)) label = "昨天";
-                else if (day.Year == today.Year) { label = day.ToString("M月d日"); }
-                else { label = day.ToString("yyyy年M月d日"); }
+                else if (day.Year == today.Year) label = day.ToString("M月d日");
+                else label = day.ToString("yyyy年M月d日");
 
-                var dayKey = day;
-                var group = new DayGroup(Context, label, extra, g.Count(), !_collapsedDays.Contains(dayKey));
-                group.Toggled += (grp, expanded) =>
-                {
-                    if (expanded) _collapsedDays.Remove(dayKey);
-                    else _collapsedDays.Add(dayKey);
-                };
-
-                foreach (var rec in g)
-                {
-                    var record = rec;
-                    var swipe = new SwipeRow(Context, rowFactory(rec));
-                    swipe.Opened += sw =>
-                    {
-                        if (_openRow != null && _openRow != sw) _openRow.Close();
-                        _openRow = sw;
-                    };
-                    swipe.DeleteRequested += sw =>
-                    {
-                        Store.Remove(record.Id);
-                        _openRow = null;
-                        Refresh();
-                    };
-                    group.Body.AddView(swipe);
-                }
-                ListHost.AddView(group);
+                var plan = new LazyGroupList.DayPlan { Key = day, Label = label };
+                plan.Records.AddRange(g);
+                plans.Add(plan);
             }
+
+            _lazy?.Detach();
+            _lazy = new LazyGroupList(Scroller, ListHost,
+                rec => WrapRow(rec, rowFactory),
+                key => _collapsedDays.Contains(key),
+                (key, expanded) =>
+                {
+                    if (expanded) _collapsedDays.Remove(key);
+                    else _collapsedDays.Add(key);
+                });
+            _lazy.Build(plans);
+        }
+
+        /// <summary>把行包进 SwipeRow，并接上滑动删除与「同一时间只开一个」的逻辑。</summary>
+        private SwipeRow WrapRow(QsoRecord rec, Func<QsoRecord, View> rowFactory)
+        {
+            var swipe = new SwipeRow(Context, rowFactory(rec));
+            swipe.Opened += sw =>
+            {
+                if (_openRow != null && _openRow != sw) _openRow.Close();
+                _openRow = sw;
+            };
+            swipe.DeleteRequested += sw =>
+            {
+                Store.Remove(rec.Id);
+                _openRow = null;
+                Refresh();
+            };
+            return swipe;
         }
 
         protected void ShowDetail(QsoRecord rec)
