@@ -34,7 +34,7 @@ namespace HamJi
         private RoundIconButton _cloud;
         private NavBar _nav;
 
-        private readonly BasePage[] _pages = new BasePage[3];
+        private readonly BasePage[] _pages = new BasePage[4];
         private BasePage _currentPage;
         private int _current = -1;
 
@@ -229,7 +229,7 @@ namespace HamJi
 
         private void ShowPage(int idx, bool animate)
         {
-            if (idx < 0 || idx > 2) return;
+            if (idx < 0 || idx > 3) return;
             if (_current == idx && _currentPage != null && _currentPage.Parent != null) return;
 
             var page = _pages[idx];
@@ -256,8 +256,8 @@ namespace HamJi
             _nav.Content = page;
             _current = idx;
             _nav.Select(idx, animate);
-            SetFabVisible(idx != 2, animate);
-            SetCloudVisible(idx != 2, animate);
+            SetFabVisible(idx != 3, animate);
+            SetCloudVisible(idx != 2 && idx != 3, animate);
             _root.Post(() => _nav.RefreshBlur());
             _root.PostDelayed(() => _nav.RefreshBlur(), 320);
         }
@@ -266,6 +266,7 @@ namespace HamJi
         {
             if (idx == 0) return new FrequencyPage(this);
             if (idx == 1) return new LogPage(this);
+            if (idx == 2) return new SearchPage(this);
             var s = new SettingsPage(this);
             s.Navigate += target => ShowPage(target, true);
             return s;
@@ -286,7 +287,7 @@ namespace HamJi
                 if (animate)
                 {
                     _fab.Animate().Alpha(0f).SetDuration(140)
-                        .WithEndAction(new Java.Lang.Runnable(() => { if (_current == 2) _fab.Visibility = ViewStates.Gone; }))
+                        .WithEndAction(new Java.Lang.Runnable(() => { if (_current == 3) _fab.Visibility = ViewStates.Gone; }))
                         .Start();
                 }
                 else
@@ -311,7 +312,7 @@ namespace HamJi
                 if (animate)
                 {
                     _cloud.Animate().Alpha(0f).SetDuration(140)
-                        .WithEndAction(new Java.Lang.Runnable(() => { if (_current == 2) _cloud.Visibility = ViewStates.Gone; }))
+                        .WithEndAction(new Java.Lang.Runnable(() => { if (_current == 2 || _current == 3) _cloud.Visibility = ViewStates.Gone; }))
                         .Start();
                 }
                 else
