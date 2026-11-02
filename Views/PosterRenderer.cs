@@ -7,32 +7,27 @@ using HamJi.Core;
 namespace HamJi.Views
 {
     /// <summary>
-    /// 分享海报：用 Canvas 画成 1200×1600（3:4）的位图。
+    /// 分享海报：Canvas 画成 1200×1600（3:4）位图。
     ///
-    /// 构图刻意和详情卡片一致 —— 同一套顺序：类型徽标 + 日期 → 主题色主视觉（呼号 / 频率最大）
-    /// → 两列读数表 → 备注 → 页脚。这样点开卡片看到的和分享出去的图是同一个东西。
+    /// 参考过的方向（不是凭空想）：
+    /// · 传统 QSL 卡片：一张纸上一个巨大的呼号，四周角落里塞满极小的技术参数，中间不留色块；
+    /// · Typographic Brutalism：极端字号对比（主标题吃掉半个版面，说明文字小到像标注）、
+    ///   等宽字体做元数据、粗细分明的横线、元素直接压到出血边；
+    /// · 柏林 techno / 工业风：纯黑或纯白底、紧缩无衬线大字、零圆角、细硬分割线。
     ///
-    /// 视觉只留三样：底色渐变、两团模糊主题色光球、一张浮在光球上的圆角内容卡。
-    /// 没有网格、扫描线、四角定位框、波形、刻度尺 —— 第一版那些显得杂，删掉了。
+    /// 所以这一版没有「卡片」这个概念 —— 所有元素直接坐在背景上，只有上下出血的细线做分区，
+    /// 背景是加深的底色 + 几团糊开的主题色光球（模糊感保留，但不再是主体）。
     ///
-    /// 配色全部取自 Dui（跟随系统深浅色 + 设置里的主题色），不写死颜色。
+    /// 排版纪律：任何一行文字在画之前都要先量宽（MeasureText / MeasureTracked），
+    /// 超宽先缩字号、缩到底再省略号；绝不靠目测摆坐标。
     /// </summary>
     public static class PosterRenderer
     {
         public const int W = 1200;
         public const int H = 1600;
 
-        // 内容卡
-        private const int CARD_L = 56;
-        private const int CARD_T = 96;
-        private const int CARD_R = W - 56;
-        private const int CARD_B = H - 96;
-
-        // 卡内留白
-        private const int PAD = 52;
-        private const int LEFT = CARD_L + PAD;          // 108
-        private const int RIGHT = CARD_R - PAD;         // 1092
-        private const int INNER_W = RIGHT - LEFT;       // 984
+        private const int M = 72;                 // 出血边距（不是卡片内边距）
+        private const int INNER = W - M * 2;      // 1056
 
         public static Bitmap Render(QsoRecord rec)
         {
@@ -40,188 +35,194 @@ namespace HamJi.Views
             int accent = Dui.Accent;
 
             // ---------- 调色板 ----------
-            int bgTop = dark ? Dui.Mix(unchecked((int)0xFF0B1018), accent, 0.12f)
-                             : Dui.Mix(unchecked((int)0xFFFFFFFF), accent, 0.06f);
-            int bgBot = dark ? unchecked((int)0xFF03050A) : unchecked((int)0xFFE9EEF6);
-            int ink = dark ? unchecked((int)0xFFF4F8FF) : unchecked((int)0xFF0B1520);
-            int ink2 = dark ? unchecked((int)0xFFA9B8CA) : unchecked((int)0xFF4E6076);
-            int ink3 = dark ? unchecked((int)0xFF6D7F94) : unchecked((int)0xFF93A0AF);
-            int cardBg = dark ? Dui.Mix(unchecked((int)0xFF12171F), accent, 0.07f)
-                              : unchecked((int)0xFFFFFFFF);
-            int hair = Dui.WithAlpha(ink, dark ? 22 : 14);
+            int bgTop = dark ? Dui.Mix(unchecked((int)0xFF070A10), accent, 0.16f)
+                             : Dui.Mix(unchecked((int)0xFFFFFFFF), accent, 0.07f);
+            int bgBot = dark ? unchecked((int)0xFF020306) : unchecked((int)0xFFEDF1F7);
+            int ink = dark ? unchecked((int)0xFFFFFFFF) : unchecked((int)0xFF070C14);
+            int ink2 = dark ? unchecked((int)0xFFB4C2D4) : unchecked((int)0xFF44566C);
+            int ink3 = dark ? unchecked((int)0xFF6E8096) : unchecked((int)0xFF8B99A9);
+            int hair = Dui.WithAlpha(ink, dark ? 34 : 26);
+            int hairSoft = Dui.WithAlpha(ink, dark ? 20 : 14);
 
             var bmp = Bitmap.CreateBitmap(W, H, Bitmap.Config.Argb8888);
             var cv = new Canvas(bmp);
 
-            // ---------- 1. 底色 ----------
-            // 必须用 (int[], float[]) 重载：Color/long 重载在 API 29+ 会按 ColorLong 解析，
-            // 半透明色会被判成非法色彩空间抛异常。
+            // ---------- 1. 底 + 光球 ----------
+            // (int[], float[]) 重载：Color/long 重载在 API 29+ 会按 ColorLong 解析，半透明色会抛异常
             var bg = new Paint(PaintFlags.AntiAlias);
             bg.SetShader(new LinearGradient(0f, 0f, 0f, H,
                 new[] { bgTop, bgBot }, new[] { 0f, 1f }, Shader.TileMode.Clamp));
             cv.DrawRect(0, 0, W, H, bg);
 
-            // ---------- 2. 主题色光球（模糊感 = 多段径向渐变，边缘完全化开） ----------
-            Blob(cv, W * 0.88f, H * 0.02f, W * 0.78f, Dui.WithAlpha(accent, dark ? 120 : 70));
-            Blob(cv, W * 0.02f, H * 1.00f, W * 0.66f, Dui.WithAlpha(accent, dark ? 82 : 48));
-            Blob(cv, W * 0.50f, H * 0.62f, W * 0.70f, Dui.WithAlpha(accent, dark ? 30 : 18));
+            Blob(cv, W * 0.92f, H * 0.06f, W * 0.72f, Dui.WithAlpha(accent, dark ? 132 : 66));
+            Blob(cv, W * 0.04f, H * 0.92f, W * 0.62f, Dui.WithAlpha(accent, dark ? 92 : 44));
+            Blob(cv, W * 0.56f, H * 0.52f, W * 0.60f, Dui.WithAlpha(accent, dark ? 34 : 16));
 
-            // ---------- 3. 内容卡 ----------
-            var cardRect = new RectF(CARD_L, CARD_T, CARD_R, CARD_B);
-            var cardFill = new Paint(PaintFlags.AntiAlias);
-            cardFill.Color = new Color(cardBg);
-            cv.DrawRoundRect(cardRect, 44f, 44f, cardFill);
-
-            var cardStroke = new Paint(PaintFlags.AntiAlias);
-            cardStroke.SetStyle(Paint.Style.Stroke);
-            cardStroke.StrokeWidth = 2f;
-            cardStroke.Color = new Color(Dui.WithAlpha(ink, dark ? 26 : 16));
-            cv.DrawRoundRect(cardRect, 44f, 44f, cardStroke);
-
-            // ---------- 4. 页眉：类型徽标 + 日期 ----------
             bool isLog = rec.IsLog;
-            float badgeTop = CARD_T + 46f;
-            DrawChip(cv, LEFT, badgeTop, isLog ? "通联日志" : "通联频率",
-                accent, Dui.WithAlpha(accent, dark ? 46 : 26), 30f, 16f);
-
-            string dateText = rec.LocalTime.ToString("yyyy.MM.dd");
-            var datePaint = Text(32f, false, ink3, false);
-            cv.DrawText(dateText, RIGHT - datePaint.MeasureText(dateText), badgeTop + 38f, datePaint);
-
-            // ---------- 5. 主视觉 ----------
-            float heroTop = badgeTop + 88f;
-            float heroBottom = heroTop + 404f;
-            var heroRect = new RectF(LEFT, heroTop, RIGHT, heroBottom);
-            var heroFill = new Paint(PaintFlags.AntiAlias);
-            heroFill.Color = new Color(Dui.WithAlpha(accent, dark ? 34 : 16));
-            cv.DrawRoundRect(heroRect, 34f, 34f, heroFill);
-
-            var heroStroke = new Paint(PaintFlags.AntiAlias);
-            heroStroke.SetStyle(Paint.Style.Stroke);
-            heroStroke.StrokeWidth = 2f;
-            heroStroke.Color = new Color(Dui.WithAlpha(accent, dark ? 60 : 40));
-            cv.DrawRoundRect(heroRect, 34f, 34f, heroStroke);
-
             string call = string.IsNullOrWhiteSpace(rec.Call) ? "" : rec.Call.ToUpperInvariant();
             bool hasCall = call.Length > 0;
 
-            var capPaint = Text(27f, true, accent, true);
-            DrawTracked(cv, isLog ? "呼号 / CALLSIGN" : "频率 / FREQUENCY",
-                LEFT + 40f, heroTop + 74f, capPaint, 5f);
+            // 字体：数字用紧缩无衬线（硬、窄、工业），元数据用等宽（终端 / 标注感），
+            // 两者刻意不统一 —— 这在 typographic brutalism 里是标准做法。
+            var numFace = Typeface.Create("sans-serif-condensed", TypefaceStyle.Bold);
+            var monoFace = Typeface.Create("monospace", TypefaceStyle.Normal);
+            var monoBold = Typeface.Create("monospace", TypefaceStyle.Bold);
 
-            // 主数字：先按宽度收敛字号，再逐字描（等宽 + 字距，读数感）
+            // ---------- 2. 顶部行程条 ----------
+            var rail = Text(24f, monoBold, Dui.WithAlpha(accent, 235), true, 0f);
+            DrawTracked(cv, "HAMJI / " + (isLog ? "QSO ARCHIVE" : "FREQ ARCHIVE"), M, 96, rail, 4f);
+
+            var railR = Text(24f, monoFace, ink3, false, 0f);
+            DrawTrackedRight(cv, rec.LocalTime.ToString("yyyy.MM.dd"), W - M, 96, railR, 1.6f);
+
+            cv.DrawRect(M, 124, W - M, 126, LinePaint(hair, 2f));
+
+            // ---------- 3. 主视觉：巨号呼号 / 频率 ----------
+            var cap = Text(22f, monoBold, Dui.WithAlpha(accent, 225), true, 0f);
+            DrawTracked(cv, isLog ? "呼号 / CALLSIGN" : "频率 / FREQUENCY", M, 194, cap, 5f);
+
             string big = isLog
                 ? (hasCall ? call : "—")
                 : (rec.Freq > 0 ? rec.FreqText : "—");
-            var bigPaint = Text(196f, true, ink, true);
-            const float bigTrack = 2f;
-            float bigMaxW = INNER_W - 80f;
-            while (bigPaint.TextSize > 96f && MeasureTracked(bigPaint, big, bigTrack) > bigMaxW)
-                bigPaint.TextSize -= 4f;
-            DrawTracked(cv, big, LEFT + 40f, heroTop + 250f, bigPaint, bigTrack);
 
-            // 频点记录：主数字右边跟一个单位，和详情卡片一样
-            if (!isLog && rec.Freq > 0)
+            // 字号从 300 往下收敛，直到塞得进 INNER（含单位位），再决定要不要画单位
+            var bigPaint = new Paint(PaintFlags.AntiAlias | PaintFlags.SubpixelText | PaintFlags.LinearText);
+            bigPaint.SetTypeface(numFace);
+            bigPaint.Color = new Color(ink);
+            float unitReserve = (!isLog && rec.Freq > 0) ? 150f : 0f;
+            float bigSize = 300f;
+            for (; bigSize > 110f; bigSize -= 4f)
             {
-                float ux = LEFT + 40f + MeasureTracked(bigPaint, big, bigTrack) + 16f;
-                cv.DrawText(rec.UnitText, ux, heroTop + 250f, Text(44f, true, ink3, false));
+                bigPaint.TextSize = bigSize;
+                if (bigPaint.MeasureText(big) + unitReserve <= INNER) break;
+            }
+            bigPaint.TextSize = bigSize;
+            // 紧缩字距：大字要紧一点才「硬」，默认字距会显得软
+            bigPaint.LetterSpacing = -0.03f;
+            cv.DrawText(big, M, 424, bigPaint);
+            float bigRight = M + bigPaint.MeasureText(big);
+
+            if (unitReserve > 0f && bigRight + 20f + 110f <= W - M)
+            {
+                var unitPaint = Text(44f, monoBold, ink3, false, 0f);
+                cv.DrawText(rec.UnitText, bigRight + 20f, 424, unitPaint);
+                bigRight += 20f + unitPaint.MeasureText(rec.UnitText);
             }
 
-            // 次级行：日志看频率，频点看呼号（没有呼号就不画，不留占位文字）
-            float subBase = heroTop + 362f;
-            float chipLeft = LEFT + 40f;
-            string freqLine = rec.Freq > 0 ? rec.FreqText : "—";
-
+            // ---------- 4. 次级行：一行技术串，量宽后再画 ----------
+            // 频点看呼号，日志看频率；模式 / RST 用「 / 」接上，不做圆角徽标（徽标会把版面拉软）
+            var parts = new List<string>();
             if (isLog)
             {
-                var f = Text(66f, true, accent, true);
-                DrawTracked(cv, freqLine, LEFT + 40f, subBase, f, 1.5f);
-                float ux = LEFT + 40f + MeasureTracked(f, freqLine, 1.5f) + 14f;
-                var unitPaint = Text(32f, true, ink3, false);
-                string unit = rec.Freq > 0 ? rec.UnitText : "";
-                cv.DrawText(unit, ux, subBase, unitPaint);
-                // chip 的起点必须按单位的实际宽度算，否则长呼号/长单位会把徽标压到文字上
-                chipLeft = ux + unitPaint.MeasureText(unit) + 30f;
+                if (rec.Freq > 0) parts.Add(rec.FreqText + " " + rec.UnitText);
             }
             else if (hasCall)
             {
-                var cp = Text(58f, true, ink, true);
-                DrawTracked(cv, call, LEFT + 40f, subBase, cp, 2f);
-                chipLeft = LEFT + 40f + MeasureTracked(cp, call, 2f) + 32f;
+                parts.Add(call);
             }
+            if (!string.IsNullOrWhiteSpace(rec.Mode)) parts.Add(rec.Mode.Trim());
+            if (isLog && !string.IsNullOrWhiteSpace(rec.RstText)) parts.Add("RST " + rec.RstText.Trim());
 
-            if (!string.IsNullOrWhiteSpace(rec.Mode))
+            if (parts.Count > 0)
             {
-                float chipRight = DrawChip(cv, chipLeft, subBase - 66f, rec.Mode,
-                    accent, Dui.WithAlpha(accent, dark ? 46 : 26), 34f, 18f);
-                if (isLog && !string.IsNullOrWhiteSpace(rec.RstText) && chipRight + 210f < RIGHT - 40f)
+                string joined = string.Join("   /   ", parts);
+                var subPaint = new Paint(PaintFlags.AntiAlias | PaintFlags.SubpixelText);
+                subPaint.SetTypeface(numFace);
+                subPaint.Color = new Color(Dui.WithAlpha(accent, 245));
+                float subSize = 46f;
+                for (; subSize > 26f; subSize -= 2f)
                 {
-                    DrawChip(cv, chipRight + 18f, subBase - 66f, "RST " + rec.RstText,
-                        ink2, Dui.WithAlpha(ink, dark ? 26 : 12), 34f, 18f);
+                    subPaint.TextSize = subSize;
+                    if (subPaint.MeasureText(joined) <= INNER) break;
                 }
+                subPaint.TextSize = subSize;
+                if (subPaint.MeasureText(joined) > INNER) joined = Ellipsize(subPaint, joined, INNER);
+                cv.DrawText(joined, M, 486, subPaint);
             }
 
-            // ---------- 6. 读数表（两列，键在上、值在下，和详情卡片一致） ----------
+            // ---------- 5. 粗分割线（主题色） ----------
+            cv.DrawRect(M, 522, W - M, 528, LinePaint(Dui.WithAlpha(accent, dark ? 230 : 200), 6f));
+
+            // ---------- 6. 读数表：两列，竖线 + 横线，没有卡片底 ----------
             var pairs = BuildPairs(rec, call);
-            // 落单时在第二个位置补空格：这样最后的时间两格（本地 / UTC）能配到同一行，
-            // 而不是 UTC 孤零零占半行、右边一片空。
             if (pairs.Count % 2 == 1) pairs.Insert(1, new[] { "", "" });
-
-            const float rowHMin = 128f, rowHMax = 168f;
-            float tableTop = heroBottom + 44f;
-            var keyPaint = Text(27f, false, ink3, false);
-            var valPaint = Text(46f, false, ink, true);
-
-            float footLine = CARD_B - 92f;
             int rows = Math.Max(1, (pairs.Count + 1) / 2);
-            // 行高按剩余空间摊开（128–168px）：字段少的时候把空白吃掉，不留一大块空底
-            float reserve = string.IsNullOrWhiteSpace(rec.Notes) ? 60f : 210f;
-            float avail = footLine - reserve - tableTop;
-            float rowH = Math.Min(rowHMax, Math.Max(rowHMin, avail / rows));
+
+            float tableTop = 560f;
+            float footLine = 1404f;
+            bool hasNotes = !string.IsNullOrWhiteSpace(rec.Notes);
+            float notesReserve = hasNotes ? 190f : 0f;
+            float rowH = Math.Min(190f, Math.Max(122f, (footLine - 56f - notesReserve - tableTop) / rows));
+            // 字段少的时候整块往下挪一点，把空白均分到上下，而不是全堆在页脚上方
+            float slack = (footLine - 56f) - (tableTop + rows * rowH + notesReserve);
+            if (slack > 0f) tableTop += Math.Min(slack * 0.45f, 40f);
+
+            var keyPaint = Text(22f, monoFace, ink3, false, 3f);
+            var valPaint = new Paint(PaintFlags.AntiAlias | PaintFlags.SubpixelText);
+            valPaint.SetTypeface(numFace);
+            valPaint.Color = new Color(ink);
+            valPaint.TextSize = 50f;
+
+            float colRule = M + INNER * 0.5f;
+            float colW = INNER * 0.5f - 36f;
 
             for (int i = 0; i < pairs.Count; i += 2)
             {
                 float top = tableTop + (i / 2) * rowH;
-
-                cv.DrawRect(LEFT, top, RIGHT, top + 2f, LinePaint(hair, 2f));
+                cv.DrawRect(M, top, W - M, top + 2f, LinePaint(hairSoft, 2f));
 
                 for (int col = 0; col < 2; col++)
                 {
                     var cell = pairs[i + col];
                     if (cell[0].Length == 0) continue;
-                    float x = col == 0 ? LEFT : LEFT + INNER_W * 0.54f;
-                    float maxW = col == 0 ? INNER_W * 0.54f - 40f : INNER_W * 0.46f - 40f;
-                    DrawTracked(cv, cell[0], x, top + 46f, keyPaint, 2f);
-                    DrawFit(cv, cell[1], x, top + rowH - 26f, maxW, valPaint, 46f, 30f);
+                    float x = col == 0 ? M : colRule + 36f;
+
+                    DrawTracked(cv, cell[0], x, top + 44f, keyPaint, 3f);
+                    DrawFitLeft(cv, cell[1], x, top + rowH - 26f, colW, valPaint, 50f, 28f);
                 }
             }
 
             float tableBottom = tableTop + rows * rowH;
-            cv.DrawRect(LEFT, tableBottom, RIGHT, tableBottom + 2f, LinePaint(hair, 2f));
+            cv.DrawRect(M, tableBottom, W - M, tableBottom + 2f, LinePaint(hairSoft, 2f));
+            // 两列之间的竖线只画在表格区，不穿越其它区块
+            cv.DrawRect(colRule, tableTop, colRule + 1.6f, tableBottom, LinePaint(hairSoft, 1.6f));
 
             // ---------- 7. 备注 ----------
-            float noteY = tableBottom + 74f;
-            if (!string.IsNullOrWhiteSpace(rec.Notes) && noteY < footLine - 60f)
+            float noteY = tableBottom + 58f;
+            if (!string.IsNullOrWhiteSpace(rec.Notes) && noteY < footLine - 70f)
             {
-                DrawTracked(cv, "备注 / NOTE", LEFT, noteY, keyPaint, 2f);
-                var notePaint = Text(38f, false, ink2, false);
-                var lines = Wrap(notePaint, rec.Notes.Trim(), INNER_W, 2);
+                DrawTracked(cv, "备注 / NOTE", M, noteY, keyPaint, 3f);
+                var notePaint = Text(34f, monoFace, ink2, false, 0f);
+                var lines = Wrap(notePaint, rec.Notes.Trim(), INNER, 2);
                 for (int i = 0; i < lines.Count; i++)
-                    cv.DrawText(lines[i], LEFT, noteY + 58f + i * 54f, notePaint);
+                    cv.DrawText(lines[i], M, noteY + 50f + i * 46f, notePaint);
             }
 
             // ---------- 8. 页脚 ----------
-            cv.DrawRect(LEFT, footLine, RIGHT, footLine + 2f, LinePaint(hair, 2f));
+            // 内容不满一屏时，右下角压一个超低透明度的 73 水印：填住空底，又不添杂元素
+            float contentBottom = hasNotes ? noteY + 150f : tableBottom;
+            if (footLine - contentBottom > 120f)
+            {
+                var wm = new Paint(PaintFlags.AntiAlias);
+                wm.SetTypeface(numFace);
+                wm.TextSize = 380f;
+                wm.LetterSpacing = -0.05f;
+                wm.Color = new Color(Dui.WithAlpha(accent, dark ? 26 : 20));
+                float wmW = wm.MeasureText("73");
+                // 右边只出血 40px：留一点裁切感，但不能把「3」整只切掉
+                cv.DrawText("73", W - wmW + 40f, footLine - 34f, wm);
+            }
 
-            var footL = Text(28f, false, ink3, false);
-            cv.DrawText("HAM记 · 记录每一段电波", LEFT, footLine + 62f, footL);
+            cv.DrawRect(M, footLine, W - M, footLine + 2f, LinePaint(hair, 2f));
+
+            var footL = Text(24f, monoFace, ink3, false, 0f);
+            DrawTracked(cv, "HAM记 · 记录每一段电波", M, footLine + 58f, footL, 2f);
 
             string de = Profile.Call;
             if (!string.IsNullOrEmpty(de))
             {
-                var footR = Text(30f, true, accent, true);
-                string s = "DE " + de.ToUpperInvariant();
-                DrawTracked(cv, s, RIGHT - MeasureTracked(footR, s, 2f), footLine + 62f, footR, 2f);
+                var footR = Text(26f, monoBold, Dui.WithAlpha(accent, 240), true, 0f);
+                DrawTrackedRight(cv, "DE " + de.ToUpperInvariant(), W - M, footLine + 58f, footR, 3f);
             }
 
             return bmp;
@@ -229,7 +230,7 @@ namespace HamJi.Views
 
         // ================= 内容 =================
 
-        /// <summary>两列读数表的内容：只放有值的字段。设备 / 功率 / 天线分三格，不挤成一行。</summary>
+        /// <summary>读数表：字段顺序和详情卡片一致，空的直接不排（不留占位）。</summary>
         private static List<string[]> BuildPairs(QsoRecord rec, string call)
         {
             var list = new List<string[]>();
@@ -253,7 +254,7 @@ namespace HamJi.Views
 
         // ================= 绘制小工具 =================
 
-        /// <summary>一团柔和的主题色光：径向渐变 + 五段 alpha，边缘完全化开，看着像高斯模糊。</summary>
+        /// <summary>一团糊开的主题色光：径向渐变 + 五段 alpha，边缘完全化开，等于自带高斯模糊。</summary>
         private static void Blob(Canvas cv, float cx, float cy, float r, int color)
         {
             int a = Color.GetAlphaComponent(color);
@@ -273,13 +274,14 @@ namespace HamJi.Views
             cv.DrawCircle(cx, cy, r, p);
         }
 
-        private static Paint Text(float size, bool mono, int color, bool bold)
+        private static Paint Text(float size, Typeface face, int color, bool bold, float track)
         {
             var p = new Paint(PaintFlags.AntiAlias | PaintFlags.SubpixelText);
-            p.SetTypeface(Typeface.Create(mono ? "monospace" : "sans-serif-medium",
-                bold ? TypefaceStyle.Bold : TypefaceStyle.Normal));
+            p.SetTypeface(face);
             p.TextSize = size;
             p.Color = new Color(color);
+            // 字距一律由 DrawTracked 逐字累加控制，这里不设 Paint.LetterSpacing，
+            // 否则逐字绘制时会被叠加两次。
             return p;
         }
 
@@ -315,57 +317,37 @@ namespace HamJi.Views
             }
         }
 
-        /// <summary>单行自适应：先缩字号，缩到底还长就截断加省略号。</summary>
-        private static void DrawFit(Canvas cv, string s, float x, float baseline,
+        private static void DrawTrackedRight(Canvas cv, string s, float right, float baseline, Paint p, float track)
+            => DrawTracked(cv, s, right - MeasureTracked(p, s, track), baseline, p, track);
+
+        /// <summary>单行自适应：先缩字号，缩到底还长就截断补省略号。</summary>
+        private static void DrawFitLeft(Canvas cv, string s, float x, float baseline,
             float maxW, Paint p, float start, float min)
         {
             if (string.IsNullOrEmpty(s)) return;
             p.TextSize = start;
             while (p.TextSize > min && p.MeasureText(s) > maxW) p.TextSize -= 2f;
+            if (p.MeasureText(s) > maxW) s = Ellipsize(p, s, maxW);
+            cv.DrawText(s, x, baseline, p);
+        }
 
-            if (p.MeasureText(s) <= maxW)
-            {
-                cv.DrawText(s, x, baseline, p);
-                return;
-            }
-
+        /// <summary>按当前画笔宽度截断，末尾补「…」。</summary>
+        private static string Ellipsize(Paint p, string s, float maxW)
+        {
+            float ell = p.MeasureText("…");
             var sb = new StringBuilder();
             float w = 0f;
-            float ell = p.MeasureText("…");
-            for (int i = 0; i < s.Length; i++)
+            foreach (char ch in s)
             {
-                float cw = p.MeasureText(s[i].ToString());
+                float cw = p.MeasureText(ch.ToString());
                 if (w + cw + ell > maxW) break;
-                sb.Append(s[i]);
+                sb.Append(ch);
                 w += cw;
             }
-            cv.DrawText(sb.Append("…").ToString(), x, baseline, p);
+            return sb.Length == 0 ? "…" : sb.Append("…").ToString();
         }
 
-        /// <summary>圆角徽标，返回右边界（方便接着排下一个）。</summary>
-        private static float DrawChip(Canvas cv, float x, float top, string text, int fg, int bg,
-            float size, float padX)
-        {
-            var tp = Text(size, false, fg, true);
-            float tw = tp.MeasureText(text);
-            float w = tw + padX * 2f;
-            float h = size * 1.9f;
-
-            var fill = new Paint(PaintFlags.AntiAlias);
-            fill.Color = new Color(bg);
-            cv.DrawRoundRect(new RectF(x, top, x + w, top + h), h * 0.32f, h * 0.32f, fill);
-
-            var stroke = new Paint(PaintFlags.AntiAlias);
-            stroke.SetStyle(Paint.Style.Stroke);
-            stroke.StrokeWidth = 1.8f;
-            stroke.Color = new Color(Dui.WithAlpha(fg, 80));
-            cv.DrawRoundRect(new RectF(x, top, x + w, top + h), h * 0.32f, h * 0.32f, stroke);
-
-            cv.DrawText(text, x + padX, top + h / 2f + size * 0.36f, tp);
-            return x + w;
-        }
-
-        /// <summary>按宽度折行（中文按字断，英文也按字断——备注里基本是中英混排，够用）。</summary>
+        /// <summary>按宽度折行（中文按字断，英文也按字断——备注基本是中英混排，够用）。</summary>
         private static List<string> Wrap(Paint p, string text, float maxW, int maxLines)
         {
             var lines = new List<string>();
@@ -398,7 +380,6 @@ namespace HamJi.Views
             if (lines.Count < maxLines && sb.Length > 0) lines.Add(sb.ToString());
             if (lines.Count == maxLines && sb.Length > 0 && lines.Count > 0)
             {
-                // 还有没排完的内容：最后一行补省略号
                 string last = lines[lines.Count - 1];
                 while (last.Length > 1 && p.MeasureText(last + "…") > maxW)
                     last = last.Substring(0, last.Length - 1);
