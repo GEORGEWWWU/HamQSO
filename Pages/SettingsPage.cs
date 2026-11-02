@@ -27,7 +27,7 @@ namespace HamJi.Pages
             // 顶部 App 信息：无卡片背景，直接沉浸
             var hero = Dui.VBox();
             hero.SetGravity(GravityFlags.CenterHorizontal);
-            hero.SetPadding(Dui.Dp(22), Dui.Dp(18), Dui.Dp(22), Dui.Dp(18));
+            hero.SetPadding(Dui.Dp(22), Dui.Dp(16), Dui.Dp(22), Dui.Dp(10));
 
             // 直接用 App 自己的图标图形（radio-tower），不再拿功能图标凑数
             var badge = new FrameLayout(Context);
@@ -98,23 +98,17 @@ namespace HamJi.Pages
             ListHost.AddView(Footer());
         }
 
-        /// <summary>底部版权与署名。</summary>
+        /// <summary>底部版权。</summary>
         private View Footer()
         {
             var box = Dui.VBox();
             box.SetGravity(GravityFlags.CenterHorizontal);
-            box.SetPadding(Dui.Dp(8), Dui.Dp(26), Dui.Dp(8), Dui.Dp(14));
-
-            var sign = Dui.Label("BH7IDW", 11.5f, Dui.TextSecondary, true);
-            sign.LetterSpacing = 0.08f;
-            var slp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
-            { Gravity = GravityFlags.CenterHorizontal };
-            box.AddView(sign, slp);
+            box.SetPadding(Dui.Dp(8), Dui.Dp(8), Dui.Dp(8), Dui.Dp(12));
 
             var copy = Dui.Label("© 2026 Ham记 · 保留所有权利", 10.5f, Dui.TextTertiary, false);
             copy.LetterSpacing = 0.02f;
             var clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
-            { TopMargin = Dui.Dp(6), Gravity = GravityFlags.CenterHorizontal };
+            { Gravity = GravityFlags.CenterHorizontal };
             box.AddView(copy, clp);
 
             return box;
@@ -123,7 +117,7 @@ namespace HamJi.Pages
         private View Gap()
         {
             var v = new View(Context);
-            v.LayoutParameters = new LinearLayout.LayoutParams(1, Dui.Dp(12));
+            v.LayoutParameters = new LinearLayout.LayoutParams(1, Dui.Dp(8));
             return v;
         }
 
@@ -152,8 +146,8 @@ namespace HamJi.Pages
             HamJi.Core.Touch.Press(row, 0.985f);
 
             // ic_call 的视口裁到了图形本身，视觉大小和别的 21dp 图标一致
-            var ic = Dui.Icon(Resource.Drawable.ic_call, 22, Dui.Accent);
-            row.AddView(ic, new LinearLayout.LayoutParams(Dui.Dp(22), Dui.Dp(22)));
+            var ic = Dui.Icon(Resource.Drawable.ic_call, 18, Dui.Accent);
+            row.AddView(ic, new LinearLayout.LayoutParams(Dui.Dp(18), Dui.Dp(18)));
 
             var tv = Dui.Label("我的呼号", 15f, Dui.TextPrimary, false);
             row.AddView(tv, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f)
