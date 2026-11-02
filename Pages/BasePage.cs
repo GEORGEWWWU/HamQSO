@@ -165,6 +165,9 @@ namespace HamJi.Pages
             }
         }
 
+        /// <summary>当前滚动位置（给"位置没变就别重做模糊"用）。</summary>
+        public int ScrollY => Scroller.ScrollY;
+
         /// <summary>内容是否超过一屏（不够长的列表就不做"滚动时收起 FAB"这类处理）。</summary>
         public bool CanScroll
             => Scroller.ChildCount > 0 && Scroller.Height > 0

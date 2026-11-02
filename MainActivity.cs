@@ -202,6 +202,7 @@ namespace HamJi
                 _searchPage = null;
                 _searchLayer = null;
 
+                _lastBlurScrollY = -1;
                 BuildUi();
                 ShowPage(keep, false);
 
@@ -305,7 +306,8 @@ namespace HamJi
                 _content.RemoveView(_currentPage);
 
             page.ApplyInsets(_topInset, NavSpace());
-            page.RefreshIfStale();      // 数据没变就直接复用已建好的页面
+            page.RefreshIfStale();
+            _lastBlurScrollY = -1;      // 数据没变就直接复用已建好的页面
             _content.AddView(page, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent));
 
             if (animate)
@@ -371,6 +373,7 @@ namespace HamJi
         }
 
         // ---- 列表滚动时暂时收起新建按钮（只为提升阅读性，松手就回来）----
+        private bool _listDragging;
         private bool _fabHiddenByScroll;
         private Java.Lang.Runnable _fabRestore;
 
@@ -380,6 +383,7 @@ namespace HamJi
         /// </summary>
         private void OnPageDrag(bool dragging)
         {
+            _listDragging = dragging;
             if (_current != 0 && _current != 1) return;         // 只有两个列表页需要
             if (_onboard != null || _searchPage != null) return;
             if (_currentPage == null || !_currentPage.CanScroll) return;
@@ -407,6 +411,7 @@ namespace HamJi
             {
                 if (_fabRestore != null) _root.RemoveCallbacks(_fabRestore);
                 RestoreFabAfterScroll();
+                OnScrollIdle();     // 松手后补一次模糊（拖动期间跳过了）
             }
         }
 
@@ -637,13 +642,19 @@ namespace HamJi
 
         private bool _blurPending;
 
+        private int _lastBlurScrollY = -1;
+
         internal void OnScrollIdle()
         {
             if (_blurPending) return;
+            if (_listDragging) return;      // 手指还按着（尤其回弹保持时）不要抢 UI 线程做模糊，会卡一帧
             _blurPending = true;
             _root.PostDelayed(() =>
             {
                 _blurPending = false;
+                int y = _currentPage != null ? _currentPage.ScrollY : 0;
+                if (y == _lastBlurScrollY) return;   // 位置没变，糊还是那张图，别白算
+                _lastBlurScrollY = y;
                 _nav?.RefreshBlur();
             }, 240);
         }
