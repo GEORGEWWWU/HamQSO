@@ -289,6 +289,12 @@ namespace HamJi.Pages
                 if (_openRow != null && _openRow != sw) _openRow.Close();
                 _openRow = sw;
             };
+            swipe.EditRequested += sw =>
+            {
+                _openRow = null;
+                sw.Close(false);
+                OpenEditor(rec);
+            };
             swipe.DeleteRequested += sw =>
             {
                 Store.Remove(rec.Id);

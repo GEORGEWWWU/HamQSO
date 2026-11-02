@@ -18,10 +18,14 @@ namespace HamJi.Views
     {
         public event Action<SwipeRow> Opened;
         public event Action<SwipeRow> DeleteRequested;
+        /// <summary>点了左滑里的编辑钮（有些用户不知道长按能编辑）。</summary>
+        public event Action<SwipeRow> EditRequested;
 
         private readonly FrameLayout _action;      // 右侧占位区（透明，只负责摆放圆钮）
         private readonly FrameLayout _circle;      // 圆形删除按钮
         private readonly ImageView _circleIcon;
+        private readonly FrameLayout _edit;        // 圆形编辑按钮（在删除左边）
+        private readonly ImageView _editIcon;
         private readonly FrameLayout _content;
         private readonly View _inner;
 
@@ -39,9 +43,10 @@ namespace HamJi.Views
         public SwipeRow(Context c, View content) : base(c)
         {
             _slop = Dui.Dp(7);
-            _gap = Dui.Dp(10);              // 圆钮与卡片之间的间距
-            _circleD = Dui.Dp(40);          // 圆钮直径
-            _btnW = _circleD + _gap + Dui.Dp(8);  // 卡片让出的总宽度
+            _gap = Dui.Dp(8);               // 两个圆钮之间、以及圆钮与卡片之间的间距
+            _circleD = Dui.Dp(36);          // 圆钮直径
+            // 卡片让出的总宽度 = 右留白 + 删除 + 间距 + 编辑
+            _btnW = Dui.Dp(8) + _circleD * 2 + _gap;
 
             var lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent)
             { BottomMargin = Dui.Dp(8) };
@@ -58,6 +63,22 @@ namespace HamJi.Views
             var clp = new FrameLayout.LayoutParams((int)_circleD, (int)_circleD)
             { Gravity = GravityFlags.Right | GravityFlags.CenterVertical, RightMargin = Dui.Dp(8) };
             _action.AddView(_circle, clp);
+
+            // 编辑按钮：放在删除左边，中性灰，不跟删除抢注意力
+            _edit = new FrameLayout(c);
+            _edit.SetBackgroundDrawable(Dui.Round(Dui.Mix(Dui.TextSecondary, Dui.BgTop, 0.18f), 20));
+            _edit.Clickable = true;
+            _editIcon = Dui.Icon(Resource.Drawable.ic_edit, 18, Color.White);
+            _edit.AddView(_editIcon, new FrameLayout.LayoutParams(Dui.Dp(18), Dui.Dp(18)) { Gravity = GravityFlags.Center });
+            var elp = new FrameLayout.LayoutParams((int)_circleD, (int)_circleD)
+            {
+                Gravity = GravityFlags.Right | GravityFlags.CenterVertical,
+                RightMargin = Dui.Dp(8) + (int)_circleD + (int)_gap
+            };
+            _action.AddView(_edit, elp);
+            _edit.Click += (s, e) => OnEditTap();
+            HamJi.Core.Touch.Press(_edit, 0.92f);
+
             AddView(_action, new FrameLayout.LayoutParams((int)_btnW, ViewGroup.LayoutParams.MatchParent)
             { Gravity = GravityFlags.Right });
 
@@ -73,6 +94,12 @@ namespace HamJi.Views
             _content.Elevation = Dui.Dpf(2);
             _content.AddView(_inner, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent));
             AddView(_content, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent));
+        }
+
+        private void OnEditTap()
+        {
+            ResetConfirm();
+            EditRequested?.Invoke(this);
         }
 
         private void OnActionTap()
@@ -123,6 +150,8 @@ namespace HamJi.Views
             _action.Animate().Alpha(open ? 1f : 0f).SetDuration(open ? 160 : 220).Start();
             _circle.Animate().ScaleX(1f).ScaleY(1f).SetDuration(320)
                 .SetInterpolator(new OvershootInterpolator(1.6f)).Start();
+            _edit.Animate().ScaleX(1f).ScaleY(1f).SetDuration(320)
+                .SetInterpolator(new OvershootInterpolator(1.6f)).Start();
             _circleIcon.Animate().Alpha(1f).SetDuration(200).Start();
             if (!open) ResetConfirm();
         }
@@ -138,6 +167,8 @@ namespace HamJi.Views
             float s = 0.7f + 0.3f * p;
             _circle.ScaleX = s;
             _circle.ScaleY = s;
+            _edit.ScaleX = s;
+            _edit.ScaleY = s;
         }
 
         protected override void OnDetachedFromWindow()
