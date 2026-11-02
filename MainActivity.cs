@@ -271,8 +271,8 @@ namespace HamJi
             _root.Post(() => _nav.RefreshBlur());
         }
 
-        /// <summary>导航条与屏幕底部（含手势条）之间的留白。原来只有 10dp，看着贴底。</summary>
-        private static int NavGap => Dui.Dp(22);
+        /// <summary>导航条与系统手势区之间的留白：手势条本身已经占掉 inset，这里只留一点点。</summary>
+        private static int NavGap => Dui.Dp(4);
 
         private int NavSpace()
             => _bottomInset + NavGap + Dui.Dp(66) + Dui.Dp(18);
