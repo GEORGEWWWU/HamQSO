@@ -12,8 +12,12 @@ namespace HamJi.Views
     public class BackdropView : View
     {
         private readonly Paint _bg = new Paint(PaintFlags.AntiAlias);
-        private readonly Paint _blob = new Paint(PaintFlags.AntiAlias);
-        private Paint _topGlow;
+        // 三团光各自缓存一份 Paint：shader 只在尺寸变化时重建，绘制时零分配
+        private readonly Paint _blobA = new Paint(PaintFlags.AntiAlias);
+        private readonly Paint _blobB = new Paint(PaintFlags.AntiAlias);
+        private readonly Paint _blobC = new Paint(PaintFlags.AntiAlias);
+        private readonly Paint _topGlow = new Paint(PaintFlags.AntiAlias);
+        private bool _built;
 
         public BackdropView(Context c) : base(c)
         {
@@ -22,16 +26,20 @@ namespace HamJi.Views
 
         private void Build()
         {
-            int h = Math.Max(1, Height);
-            _bg.SetShader(new LinearGradient(0, 0, 0, h, new Color(Dui.BgTop), new Color(Dui.BgBottom), Shader.TileMode.Clamp));
+            int w = Width, h = Height;
+            if (w <= 0 || h <= 0) return;
 
-            if (_topGlow == null)
-            {
-                _topGlow = new Paint(PaintFlags.AntiAlias);
-                _topGlow.SetShader(new LinearGradient(0, 0, 0, Dui.Dpf(320),
-                    new Color(Dui.WithAlpha(Dui.Accent, Dui.Dark ? 34 : 22)),
-                    new Color(Dui.WithAlpha(Dui.Accent, 0)), Shader.TileMode.Clamp));
-            }
+            _bg.SetShader(new LinearGradient(0, 0, 0, h,
+                new Color(Dui.BgTop), new Color(Dui.BgBottom), Shader.TileMode.Clamp));
+
+            _topGlow.SetShader(new LinearGradient(0, 0, 0, Dui.Dpf(320),
+                new Color(Dui.WithAlpha(Dui.Accent, Dui.Dark ? 34 : 22)),
+                new Color(Dui.WithAlpha(Dui.Accent, 0)), Shader.TileMode.Clamp));
+
+            Blob(_blobA, w * 0.88f, h * 0.06f, w * 0.62f, Dui.BlobA, Dui.Dark ? 150 : 120);
+            Blob(_blobB, w * 0.02f, h * 0.34f, w * 0.55f, Dui.BlobB, Dui.Dark ? 120 : 100);
+            Blob(_blobC, w * 0.62f, h * 0.86f, w * 0.66f, Dui.BlobC, Dui.Dark ? 120 : 105);
+            _built = true;
         }
 
         protected override void OnSizeChanged(int w, int h, int oldw, int oldh)
@@ -44,23 +52,21 @@ namespace HamJi.Views
         {
             int w = Width, h = Height;
             if (w <= 0 || h <= 0) return;
-            Build();
+            if (!_built) Build();
+            if (!_built) return;
 
             canvas.DrawRect(0, 0, w, h, _bg);
-
-            DrawBlob(canvas, w * 0.88f, h * 0.06f, w * 0.62f, Dui.BlobA, Dui.Dark ? 150 : 120);
-            DrawBlob(canvas, w * 0.02f, h * 0.34f, w * 0.55f, Dui.BlobB, Dui.Dark ? 120 : 100);
-            DrawBlob(canvas, w * 0.62f, h * 0.86f, w * 0.66f, Dui.BlobC, Dui.Dark ? 120 : 105);
-
+            canvas.DrawCircle(w * 0.88f, h * 0.06f, w * 0.62f, _blobA);
+            canvas.DrawCircle(w * 0.02f, h * 0.34f, w * 0.55f, _blobB);
+            canvas.DrawCircle(w * 0.62f, h * 0.86f, w * 0.66f, _blobC);
             canvas.DrawRect(0, 0, w, Dui.Dpf(320), _topGlow);
         }
 
-        private void DrawBlob(Canvas c, float cx, float cy, float radius, int color, int alpha)
+        private static void Blob(Paint p, float cx, float cy, float radius, int color, int alpha)
         {
-            _blob.SetShader(new RadialGradient(cx, cy, radius,
+            p.SetShader(new RadialGradient(cx, cy, radius,
                 new[] { Dui.WithAlpha(color, alpha), Dui.WithAlpha(color, alpha / 3), Dui.WithAlpha(color, 0) },
                 new[] { 0f, 0.55f, 1f }, Shader.TileMode.Clamp));
-            c.DrawCircle(cx, cy, radius, _blob);
         }
     }
 
@@ -132,31 +138,10 @@ namespace HamJi.Views
             if (Backdrop == null || Backdrop.Width <= 0 || Width <= 0 || Height <= 0) return;
             try
             {
-                const float scale = 0.11f;
+                // 0.09 已经够糊；再低会糊成一片色块，再高白花 CPU
+                const float scale = 0.09f;
                 int tw = Math.Max(4, (int)(Backdrop.Width * scale));
                 int th = Math.Max(4, (int)(Backdrop.Height * scale));
-                var bmp = Bitmap.CreateBitmap(tw, th, Bitmap.Config.Argb8888);
-                var canvas = new Canvas(bmp);
-                canvas.Scale(scale, scale);
-
-                Backdrop.Draw(canvas);
-                if (Content != null && Content.Width > 0)
-                {
-                    try
-                    {
-                        var locC = new int[2];
-                        var locB = new int[2];
-                        Content.GetLocationInWindow(locC);
-                        Backdrop.GetLocationInWindow(locB);
-                        canvas.Save();
-                        canvas.Translate(locC[0] - locB[0], locC[1] - locB[1]);
-                        Content.Draw(canvas);
-                        canvas.Restore();
-                    }
-                    catch { }
-                }
-
-                ImgBlur.Box(bmp, 5);
 
                 var locA = new int[2];
                 var locS = new int[2];
@@ -164,6 +149,30 @@ namespace HamJi.Views
                 GetLocationInWindow(locS);
                 int ox = locS[0] - locA[0];
                 int oy = locS[1] - locA[1];
+
+                var bmp = Bitmap.CreateBitmap(tw, th, Bitmap.Config.Argb8888);
+                var canvas = new Canvas(bmp);
+                canvas.Scale(scale, scale);
+                // 只光栅化面板自己盖住的那一条，别把整页内容都画一遍
+                canvas.ClipRect(ox, oy, ox + Width, oy + Height);
+
+                Backdrop.Draw(canvas);
+                if (Content != null && Content.Width > 0)
+                {
+                    try
+                    {
+                        var locC = new int[2];
+                        Content.GetLocationInWindow(locC);
+                        canvas.Save();
+                        canvas.Translate(locC[0] - locA[0], locC[1] - locA[1]);
+                        Content.Draw(canvas);
+                        canvas.Restore();
+                    }
+                    catch { }
+                }
+
+                ImgBlur.Box(bmp, 4);
+
                 var src = new Rect();
                 src.Set((int)(ox * scale), (int)(oy * scale), (int)((ox + Width) * scale), (int)((oy + Height) * scale));
                 src.Intersect(0, 0, tw, th);
@@ -182,7 +191,17 @@ namespace HamJi.Views
         {
             base.OnSizeChanged(w, h, oldw, oldh);
             _thumb = null;
+            // 高光渐变随高度变化，缓存在这里，绘制时不再每帧 new
+            if (h > 0)
+            {
+                _sheen.SetShader(new LinearGradient(0, 0, 0, h * 0.55f,
+                    new Color(Dui.WithAlpha(Color.White, Dui.Dark ? 18 : 56)),
+                    new Color(Dui.WithAlpha(Color.White, 0)), Shader.TileMode.Clamp));
+                _sheenBuilt = true;
+            }
         }
+
+        private bool _sheenBuilt;
 
         protected override void OnDraw(Canvas canvas)
         {
@@ -199,10 +218,10 @@ namespace HamJi.Views
             _tint.Color = new Color(TintColor);
             canvas.DrawRect(full, _tint);
 
-            _sheen.SetShader(new LinearGradient(0, 0, 0, h * 0.55f,
-                new Color(Dui.WithAlpha(Color.White, Dui.Dark ? 18 : 56)),
-                new Color(Dui.WithAlpha(Color.White, 0)), Shader.TileMode.Clamp));
-            canvas.DrawRect(full, _sheen);
+            if (_sheenBuilt)
+            {
+                canvas.DrawRect(full, _sheen);
+            }
 
             float sw = _border.StrokeWidth;
             var rr = new RectF(sw / 2f, sw / 2f, w - sw / 2f, h - sw / 2f);

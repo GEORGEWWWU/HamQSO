@@ -54,26 +54,19 @@ namespace HamJi
             AppTheme.Load(this);
             Dui.Init(this);
             AppTheme.Apply();
+            _themeAtBuild = AppTheme.Current;
+            _darkAtBuild = Dui.Dark;
             Crash.Install(this);
             try
             {
                 SetupWindow();
                 BuildUi();
-                Store.EnsureLoaded();
                 Store.Changed += OnStoreChanged;
                 Store.Error += OnStoreError;
-                Updater.SilentCheck(this);   // 静默检查更新：有新版才打扰
-                if (savedInstanceState != null)
-                {
-                    var idx = savedInstanceState.GetInt("tab", 1);
-                    ShowPage(idx, false);
-                }
-                else
-                {
-                    // 默认落在通联日志页
-                    ShowPage(1, false);
-                }
-                ApplyShortcut(Intent);
+                Profile.Changed += OnProfileChanged;
+                // 静默检查更新挪到首帧之后：启动阶段不跟渲染抢线程/网络
+                _root.PostDelayed(() => Updater.SilentCheck(this), 2500);
+                _root.Post(() => LateStart(savedInstanceState));
                 _root.Post(() => MaybeOnboard(true));
             }
             catch (System.Exception ex)
@@ -81,6 +74,28 @@ namespace HamJi
                 Crash.Save(this, ex.ToString());
                 var view = Crash.BuildFatalView(this, "启动失败", ex.GetType().Name + "\n\n" + ex.Message + "\n\n" + ex.StackTrace);
                 SetContentView(view);
+            }
+        }
+
+        /// <summary>
+        /// 数据加载 + 首页构建放到首帧之后：先把壳画出来，别让用户对着白屏等
+        /// （这两步合计约 150ms，主要在 JIT 和 View 树构建上）。
+        /// </summary>
+        private void LateStart(Bundle savedInstanceState)
+        {
+            if (IsFinishing || IsDestroyed) return;
+            try
+            {
+                Store.EnsureLoaded();
+
+                int idx = savedInstanceState != null ? savedInstanceState.GetInt("tab", 1) : 1;
+                ShowPage(idx, false);
+
+                ApplyShortcut(Intent);
+            }
+            catch (System.Exception ex)
+            {
+                Crash.Save(this, "LateStart: " + ex);
             }
         }
 
@@ -94,6 +109,7 @@ namespace HamJi
         {
             Store.Changed -= OnStoreChanged;
             Store.Error -= OnStoreError;
+            Profile.Changed -= OnProfileChanged;
             base.OnDestroy();
         }
 
@@ -195,7 +211,7 @@ namespace HamJi
             _root.SetOnApplyWindowInsetsListener(new InsetsWatcher(this));
             _root.RequestApplyInsets();
 
-            _root.Post(() => _nav.RefreshBlur());
+            _root.PostDelayed(() => _nav.RefreshBlur(), 120);
             _root.AddOnLayoutChangeListener(new LayoutWatcher(this));
             _root.ViewTreeObserver.AddOnScrollChangedListener(new ScrollWatcher(this));
         }
@@ -238,7 +254,7 @@ namespace HamJi
                 _content.RemoveView(_currentPage);
 
             page.ApplyInsets(_topInset, NavSpace());
-            page.Refresh();
+            page.RefreshIfStale();      // 数据没变就直接复用已建好的页面
             _content.AddView(page, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent));
 
             if (animate)
@@ -448,18 +464,26 @@ namespace HamJi
         }
 
         private bool _firstResume = true;
+        private int _themeAtBuild = -1;
+        private bool _darkAtBuild;
 
         protected override void OnResume()
         {
             base.OnResume();
             try
             {
-                Dui.Init(this);
-                AppTheme.Apply();
+                // 主题 / 深浅色没变就别重复读一遍资源（原先是每次回前台都 Init + Apply）
+                if (_themeAtBuild < 0 || _themeAtBuild != AppTheme.Current || _darkAtBuild != Dui.Dark)
+                {
+                    Dui.Init(this);
+                    AppTheme.Apply();
+                    _themeAtBuild = AppTheme.Current;
+                    _darkAtBuild = Dui.Dark;
+                }
                 ApplyBarIcons();
                 // 首次进入时页面刚构建完，再刷新一次会闪一下（内容被清空重建），跳过
                 if (_firstResume) _firstResume = false;
-                else _currentPage?.Refresh();
+                else _currentPage?.RefreshIfStale();
                 // 跳过引导后又回到前台：呼号仍为空时补弹一次（同一会话里不重复骚扰）
                 if (!_onboardDone && _onboard == null && !Profile.HasCall) MaybeOnboard(true);
             }
@@ -476,6 +500,11 @@ namespace HamJi
                 SettingsPage.HandleExportResult(this, resultCode, data);
             else if (requestCode == SettingsPage.ReqImport)
                 SettingsPage.HandleImportResult(this, resultCode, data);
+        }
+
+        private void OnProfileChanged()
+        {
+            _root?.Post(() => _currentPage?.Refresh());
         }
 
         private void OnStoreChanged()

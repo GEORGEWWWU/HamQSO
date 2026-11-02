@@ -115,8 +115,21 @@ namespace HamJi.Pages
             if (Context is MainActivity act) act.OpenSearch();
         }
 
+        private int _builtVersion = -1;
+
+        /// <summary>
+        /// 数据没变就别重建整页（切 tab 时省掉一次全量 View 树重建）。
+        /// 需要强制刷新的场景（改设置等）直接调 Refresh()。
+        /// </summary>
+        public void RefreshIfStale()
+        {
+            if (ListHost.ChildCount > 0 && _builtVersion == Store.Version) return;
+            Refresh();
+        }
+
         public void Refresh()
         {
+            _builtVersion = Store.Version;
             _lazy?.Detach();
             _lazy = null;
             ListHost.RemoveAllViews();

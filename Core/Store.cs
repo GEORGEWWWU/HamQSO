@@ -34,6 +34,9 @@ namespace HamJi.Core
         public static event Action Changed;
         public static event Action<string> Error;
 
+        /// <summary>数据版本：每次落盘 +1，页面用它判断"要不要重建"。</summary>
+        public static int Version { get; private set; }
+
         public static string FilePath
         {
             get
@@ -349,6 +352,10 @@ namespace HamJi.Core
             {
                 _lastError = "保存失败：" + ex.Message;
                 Error?.Invoke(_lastError);
+            }
+            finally
+            {
+                Version++;
             }
         }
     }
