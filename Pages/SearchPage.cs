@@ -490,8 +490,8 @@ namespace HamJi.Pages
             }
 
             l1.AddView(new View(Dui.Ctx), new LinearLayout.LayoutParams(0, 1, 1f));
-            l1.AddView(Dui.Label(showDate ? rec.LocalTime.ToString("MM-dd HH:mm") : rec.TimeText,
-                11.5f, Dui.TextTertiary, false));
+            l1.AddView(Widgets.DualTime(rec.Time, 11.5f,
+                showDate ? rec.LocalTime.ToString("MM-dd") : null));
             card.AddView(l1);
 
             string meta = rec.IsLog ? Dui.FreqLine(rec) : null;

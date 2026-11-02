@@ -46,8 +46,7 @@ namespace HamJi.Pages
 
             l1.AddView(new View(Dui.Ctx), new LinearLayout.LayoutParams(0, 1, 1f));
 
-            var time = Dui.Label(rec.TimeText, 12f, Dui.TextTertiary, false);
-            l1.AddView(time);
+            l1.AddView(Widgets.DualTime(rec.Time));
             row.AddView(l1);
 
             var l2 = Dui.HBox();
@@ -117,7 +116,7 @@ namespace HamJi.Pages
             }
 
             l1.AddView(new View(Dui.Ctx), new LinearLayout.LayoutParams(0, 1, 1f));
-            l1.AddView(Dui.Label(rec.TimeText, 12f, Dui.TextTertiary, false));
+            l1.AddView(Widgets.DualTime(rec.Time));
             row.AddView(l1);
 
             var meta = Dui.FreqLine(rec);

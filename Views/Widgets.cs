@@ -21,6 +21,61 @@ namespace HamJi.Views
             return tv;
         }
 
+        /// <summary>
+        /// 行右侧时间：本地时间 + 时区缩写，斜杠后跟固定的 UTC 时间。
+        /// 例如「08:00 BJT / 00:00 UTC」。时区标签用更小字号 + 字距拉开，和时间本体区分开，
+        /// 颜色压到最暗一档，成百条排下来不会抢视线。
+        /// </summary>
+        public static LinearLayout DualTime(long ms, float sp = 12f, string datePrefix = null)
+        {
+            var box = Dui.HBox();
+
+            if (!string.IsNullOrEmpty(datePrefix))
+            {
+                var d = Dui.Label(datePrefix, Math.Max(9f, sp - 2f), Dui.TextTertiary, false);
+                d.SetTypeface(Typeface.Create("monospace", TypefaceStyle.Normal), TypefaceStyle.Normal);
+                var dlp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
+                { RightMargin = Dui.Dp(6), Gravity = GravityFlags.Bottom, BottomMargin = Dui.Dp(1) };
+                box.AddView(d, dlp);
+            }
+
+            box.AddView(TimeCell(TimeKit.LocalHm(ms), TimeKit.LocalAbbr(ms), sp, Dui.TextSecondary));
+
+            var sep = Dui.Label("/", sp - 1f, Dui.WithAlpha(Dui.TextTertiary, Dui.Dark ? 120 : 140), false);
+            sep.SetPadding(Dui.Dp(4), 0, Dui.Dp(4), 0);
+            var slp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
+            { Gravity = GravityFlags.Bottom, BottomMargin = Dui.Dp(1) };
+            box.AddView(sep, slp);
+
+            box.AddView(TimeCell(TimeKit.UtcHm(ms), "UTC", sp, Dui.TextTertiary));
+            return box;
+        }
+
+        /// <summary>「时钟 + 小时区缩写」这一节。</summary>
+        private static LinearLayout TimeCell(string hm, string tag, float sp, int color)
+        {
+            var box = Dui.HBox();
+
+            var t = Dui.Label(hm, sp, color, false);
+            t.SetTypeface(Typeface.Create("monospace", TypefaceStyle.Normal), TypefaceStyle.Normal);
+            t.LetterSpacing = -0.01f;
+            box.AddView(t);
+
+            if (!string.IsNullOrEmpty(tag))
+            {
+                var g = Dui.Label(tag, Math.Max(8f, sp - 3.5f),
+                    Dui.WithAlpha(Dui.TextTertiary, Dui.Dark ? 185 : 205), true);
+                g.LetterSpacing = 0.08f;
+                var lp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
+                { LeftMargin = Dui.Dp(3), Gravity = GravityFlags.Bottom, BottomMargin = Dui.Dp(1.5f) };
+                box.AddView(g, lp);
+            }
+            return box;
+        }
+
         public static LinearLayout Card()
         {
             var card = Dui.VBox();
