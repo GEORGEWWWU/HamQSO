@@ -76,11 +76,11 @@ namespace HamJi.Pages
             // 检查更新：右侧显示远端最新版本号，真有新版时后面再挂一个主题色标签
             card2.AddView(UpdateRow());
 
-            var themeRow = Widgets.SettingRow(Resource.Drawable.ic_settings, "主题色",
+            var themeRow = Widgets.SettingRow(Resource.Drawable.ic_paint, "主题色",
                 AppTheme.Names[AppTheme.Current], false, true, AppTheme.Swatch(AppTheme.Current));
             themeRow.Click += (s2, e2) => ShowThemeMenu(themeRow);
             card2.AddView(themeRow);
-            card2.AddView(Row(Resource.Drawable.ic_export, "源码仓库", "GitHub", OpenRepo));
+            card2.AddView(Row(Resource.Drawable.ic_github, "源码仓库", "GitHub", OpenRepo));
             ListHost.AddView(card2);
 
             ListHost.AddView(Footer());
