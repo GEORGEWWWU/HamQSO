@@ -99,6 +99,9 @@ namespace HamJi.Views
             bigPaint.TextSize = bigSize;
             // 紧缩字距：大字要紧一点才「硬」，默认字距会显得软
             bigPaint.LetterSpacing = -0.03f;
+            // 收到 110 还放不下（超长便携呼号如 VP2E/G4XYZ/P）：截断补省略号，别让它冲出画布
+            if (bigPaint.MeasureText(big) > INNER - unitReserve)
+                big = Ellipsize(bigPaint, big, INNER - unitReserve);
             cv.DrawText(big, M, 424, bigPaint);
             float bigRight = M + bigPaint.MeasureText(big);
 

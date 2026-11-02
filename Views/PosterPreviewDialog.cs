@@ -122,6 +122,8 @@ namespace HamJi.Views
 
         private void OnShare()
         {
+            // 长按和关闭可能撞在一起：图已经回收就不要再拿去压 PNG
+            if (_bmp == null || _bmp.IsRecycled) return;
             try
             {
                 string baseName = "hamji-" + (_rec.IsLog ? "log" : "freq") + "-" +
@@ -192,11 +194,20 @@ namespace HamJi.Views
                 // 长按默认就是开的，不用再 setLongpressEnabled(true)
             }
 
-            /// <summary>退出时把大图从视图上摘掉（1200×1600 ≈ 7.7MB，别让它挂在已销毁的视图上）。</summary>
+            /// <summary>
+            /// 退出时把大图从视图上摘掉并回收（1200×1600 ARGB ≈ 7.7MB 原生内存）。
+            /// 只置 null 不够：Bitmap 的像素在 native 堆上，不 Recycle 就得等 GC 才还回去，
+            /// 连续看几张海报很容易把内存顶上去。
+            /// </summary>
             public void Detach()
             {
                 try { _anim?.Cancel(); } catch { }
                 _anim = null;
+                try
+                {
+                    if (_bmp != null && !_bmp.IsRecycled) _bmp.Recycle();
+                }
+                catch { }
                 _bmp = null;
                 Invalidate();
             }
