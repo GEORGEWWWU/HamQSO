@@ -73,20 +73,8 @@ namespace HamJi.Pages
             // 关于
             var card2 = Widgets.Card();
 
-            // 右侧显示远端最新版本号：先给缓存值，没有就后台拉一次再回填
-            string remote = Updater.LatestTag;
-            TextView updateValue;
-            var updateRow = Widgets.SettingRow(Resource.Drawable.ic_update, "检查更新",
-                string.IsNullOrEmpty(remote) ? "检测中…" : remote, false, true, 0, out updateValue);
-            updateRow.Click += (s2, e2) => CheckUpdate();
-            card2.AddView(updateRow);
-            if (string.IsNullOrEmpty(remote))
-            {
-                Updater.EnsureLatest(Context, tag =>
-                {
-                    if (updateValue != null && !string.IsNullOrEmpty(tag)) updateValue.Text = tag;
-                });
-            }
+            // 检查更新：右侧显示远端最新版本号，真有新版时后面再挂一个主题色标签
+            card2.AddView(UpdateRow());
 
             var themeRow = Widgets.SettingRow(Resource.Drawable.ic_settings, "主题色",
                 AppTheme.Names[AppTheme.Current], false, true, AppTheme.Swatch(AppTheme.Current));
@@ -121,10 +109,88 @@ namespace HamJi.Pages
             return v;
         }
 
+        /// <summary>检查更新行：右侧「版本号 + 新版可用标签」，标签只在真有新版时出现。</summary>
+        private LinearLayout UpdateRow()
+        {
+            var row = Dui.HBox();
+            row.LayoutParameters = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
+            row.SetPadding(Dui.Dp(16), Dui.Dp(12), Dui.Dp(14), Dui.Dp(12));
+            row.Clickable = true;
+            row.Focusable = true;
+            HamJi.Core.Touch.Press(row, 0.985f);
+
+            var ic = Dui.Icon(Resource.Drawable.ic_update, 21, Dui.Accent);
+            row.AddView(ic, new LinearLayout.LayoutParams(Dui.Dp(21), Dui.Dp(21)));
+
+            var tv = Dui.Label("检查更新", 14.5f, Dui.TextPrimary, false);
+            row.AddView(tv, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f)
+            { LeftMargin = Dui.Dp(9) });
+
+            _updValue = Dui.Label("检测中…", 12.5f, Dui.TextTertiary, false);
+            _updValue.SetSingleLine(true);
+            row.AddView(_updValue, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent));
+
+            _updTag = Widgets.Chip("新版可用");
+            _updTag.Visibility = ViewStates.Gone;
+            row.AddView(_updTag, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
+            { LeftMargin = Dui.Dp(6) });
+
+            var ch = Dui.Icon(Resource.Drawable.ic_chevron, 16, Dui.TextTertiary);
+            ch.Alpha = 0.7f;
+            row.AddView(ch, new LinearLayout.LayoutParams(Dui.Dp(16), Dui.Dp(16)) { LeftMargin = Dui.Dp(4) });
+
+            row.Click += (s, e) => CheckUpdate();
+            LoadUpdate();
+            return row;
+        }
+
+        private TextView _updValue;
+        private TextView _updTag;
+
+        /// <summary>把行内文字与标签同步到当前已知的远端版本。</summary>
+        private void ApplyUpdateState(string tag)
+        {
+            if (_updValue == null) return;
+            if (string.IsNullOrEmpty(tag))
+            {
+                _updValue.Text = "—";
+                if (_updTag != null) _updTag.Visibility = ViewStates.Gone;
+                return;
+            }
+            _updValue.Text = tag;
+            bool newer = Updater.Newer(tag, Updater.AppVersion());
+            if (_updTag != null)
+            {
+                _updTag.Visibility = newer ? ViewStates.Visible : ViewStates.Gone;
+            }
+        }
+
+        /// <summary>有缓存先用缓存，没有就后台拉一次（不阻塞页面）。</summary>
+        private void LoadUpdate()
+        {
+            var tag = Updater.LatestTag;
+            if (!string.IsNullOrEmpty(tag))
+            {
+                ApplyUpdateState(tag);
+                return;
+            }
+            Updater.Check(Context, r =>
+            {
+                if (_updValue == null) return;
+                if (!IsAttachedToWindow) return;
+                ApplyUpdateState(r.Ok ? r.Tag : null);
+            });
+        }
+
         private void CheckUpdate()
         {
+            if (_updValue != null) _updValue.Text = "检测中…";
+            if (_updTag != null) _updTag.Visibility = ViewStates.Gone;
             Toast.MakeText(Context, "正在检查更新…", ToastLength.Short).Show();
-            Updater.ManualCheck(Context);
+            Updater.ManualCheck(Context, () => ApplyUpdateState(Updater.LatestTag));
         }
 
         private LinearLayout Row(int icon, string title, string value, Action onClick, bool danger = false)
