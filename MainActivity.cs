@@ -227,7 +227,7 @@ namespace HamJi
             {
                 Gravity = GravityFlags.Bottom | GravityFlags.Right,
                 RightMargin = Dui.Dp(20),
-                BottomMargin = Dui.Dp(86)
+                BottomMargin = NavGap + Dui.Dp(66) + Dui.Dp(14)
             };
             _root.AddView(_fab, fabLp);
             _fab.Click += (s, e) => OpenNew();
@@ -238,7 +238,7 @@ namespace HamJi
                 Gravity = GravityFlags.Bottom,
                 LeftMargin = Dui.Dp(16),
                 RightMargin = Dui.Dp(16),
-                BottomMargin = Dui.Dp(12)
+                BottomMargin = NavGap
             };
             _root.AddView(_nav, navLp);
             _nav.Selected += idx => { if (idx != _current) ShowPage(idx, true); };
@@ -259,11 +259,11 @@ namespace HamJi
             _bottomInset = bottom;
 
             var navLp = (FrameLayout.LayoutParams)_nav.LayoutParameters;
-            navLp.BottomMargin = bottom + Dui.Dp(10);
+            navLp.BottomMargin = bottom + NavGap;
             _nav.LayoutParameters = navLp;
 
             var fabLp = (FrameLayout.LayoutParams)_fab.LayoutParameters;
-            fabLp.BottomMargin = bottom + Dui.Dp(10) + Dui.Dp(66) + Dui.Dp(14);
+            fabLp.BottomMargin = bottom + NavGap + Dui.Dp(66) + Dui.Dp(14);
             _fab.LayoutParameters = fabLp;
 
             _currentPage?.ApplyInsets(_topInset, NavSpace());
@@ -271,8 +271,11 @@ namespace HamJi
             _root.Post(() => _nav.RefreshBlur());
         }
 
+        /// <summary>导航条与屏幕底部（含手势条）之间的留白。原来只有 10dp，看着贴底。</summary>
+        private static int NavGap => Dui.Dp(22);
+
         private int NavSpace()
-            => _bottomInset + Dui.Dp(66) + Dui.Dp(28);
+            => _bottomInset + NavGap + Dui.Dp(66) + Dui.Dp(18);
 
         private void ShowPage(int idx, bool animate)
         {
