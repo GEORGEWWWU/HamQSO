@@ -143,13 +143,26 @@ namespace HamJi.Views
             // ---------- 5. 粗分割线（主题色） ----------
             cv.DrawRect(M, 522, W - M, 528, LinePaint(Dui.WithAlpha(accent, dark ? 230 : 200), 6f));
 
+            // ---------- 5.5 「73」水印：位置永远固定，先画，让后面的线和字压在它上面 ----------
+            // 这就是固定装饰，不跟着内容多少变化 —— 日志有 4 行读数、频点只有 2 行，水印都在同一处。
+            float footLine = 1404f;
+            {
+                var wm = new Paint(PaintFlags.AntiAlias);
+                wm.SetTypeface(numFace);
+                wm.TextSize = 380f;
+                wm.LetterSpacing = -0.05f;
+                wm.Color = new Color(Dui.WithAlpha(accent, dark ? 30 : 24));
+                float wmW = wm.MeasureText("73");
+                // 右边只出血 40px：留一点裁切感，但不能把「3」整只切掉
+                cv.DrawText("73", W - wmW + 40f, footLine - 34f, wm);
+            }
+
             // ---------- 6. 读数表：两列，竖线 + 横线，没有卡片底 ----------
             var pairs = BuildPairs(rec, call);
             if (pairs.Count % 2 == 1) pairs.Insert(1, new[] { "", "" });
             int rows = Math.Max(1, (pairs.Count + 1) / 2);
 
             float tableTop = 560f;
-            float footLine = 1404f;
             bool hasNotes = !string.IsNullOrWhiteSpace(rec.Notes);
             float notesReserve = hasNotes ? 190f : 0f;
             float rowH = Math.Min(190f, Math.Max(122f, (footLine - 56f - notesReserve - tableTop) / rows));
@@ -199,20 +212,6 @@ namespace HamJi.Views
             }
 
             // ---------- 8. 页脚 ----------
-            // 内容不满一屏时，右下角压一个超低透明度的 73 水印：填住空底，又不添杂元素
-            float contentBottom = hasNotes ? noteY + 150f : tableBottom;
-            if (footLine - contentBottom > 120f)
-            {
-                var wm = new Paint(PaintFlags.AntiAlias);
-                wm.SetTypeface(numFace);
-                wm.TextSize = 380f;
-                wm.LetterSpacing = -0.05f;
-                wm.Color = new Color(Dui.WithAlpha(accent, dark ? 26 : 20));
-                float wmW = wm.MeasureText("73");
-                // 右边只出血 40px：留一点裁切感，但不能把「3」整只切掉
-                cv.DrawText("73", W - wmW + 40f, footLine - 34f, wm);
-            }
-
             cv.DrawRect(M, footLine, W - M, footLine + 2f, LinePaint(hair, 2f));
 
             var footL = Text(24f, monoFace, ink3, false, 0f);
