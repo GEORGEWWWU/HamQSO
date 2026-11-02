@@ -6,3 +6,11 @@ shots/
 *.user
 *.suo
 .vs/
+
+# 临时调试产物
+a.json
+build.log
+logcat.txt
+procs.txt
+ui.xml
+*.idsig
