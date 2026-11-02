@@ -185,6 +185,7 @@ namespace HamJi
             try
             {
                 int keep = _current < 0 ? 1 : _current;
+                int top = _topInset, bottom = _bottomInset;
 
                 // 重算调色板（Dui.Init 会把颜色重新读一遍，再按新主题覆盖强调色）
                 Dui.Init(this);
@@ -203,6 +204,17 @@ namespace HamJi
 
                 BuildUi();
                 ShowPage(keep, false);
+
+                // 关键：新视图树的导航栏只带 NavGap，还没算上系统栏 inset。
+                // OnInsetsChanged 有「值没变就跳过」的短路，重建后值恰好没变，
+                // 不强制重放一次，导航栏就会掉到手势条边上（换主题后"位置往下跑"就是这个）。
+                if (top >= 0 || bottom >= 0)
+                {
+                    _topInset = -1;
+                    _bottomInset = -1;
+                    OnInsetsChanged(top, bottom);
+                }
+
                 _root.Post(() => _nav.RefreshBlur());
             }
             catch (System.Exception ex)
