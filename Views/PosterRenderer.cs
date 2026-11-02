@@ -7,11 +7,13 @@ using HamJi.Core;
 namespace HamJi.Views
 {
     /// <summary>
-    /// 通联卡片海报：用 Canvas 逐层绘制成一张 1200×1600（3:4）的位图。
+    /// 分享海报：用 Canvas 画成 1200×1600（3:4）的位图。
     ///
-    /// 刻意和详情卡片长得不一样：详情卡片是「信息面板」（标签在左、值在右、按钮在底），
-    /// 海报是「仪表 / HUD」构图 —— 细网格 + 主题色光晕 + 四角定位框 + 信号波形，
-    /// 呼号 / 频率放在左上主视觉位，数据以两列读数表铺开，底部压一条台站信息栏。
+    /// 构图刻意和详情卡片一致 —— 同一套顺序：类型徽标 + 日期 → 主题色主视觉（呼号 / 频率最大）
+    /// → 两列读数表 → 备注 → 页脚。这样点开卡片看到的和分享出去的图是同一个东西。
+    ///
+    /// 视觉只留三样：底色渐变、两团模糊主题色光球、一张浮在光球上的圆角内容卡。
+    /// 没有网格、扫描线、四角定位框、波形、刻度尺 —— 第一版那些显得杂，删掉了。
     ///
     /// 配色全部取自 Dui（跟随系统深浅色 + 设置里的主题色），不写死颜色。
     /// </summary>
@@ -19,8 +21,18 @@ namespace HamJi.Views
     {
         public const int W = 1200;
         public const int H = 1600;
-        private const int M = 88;        // 页面外边距
-        private const int CX = 134;      // 正文左边界（给主题色竖条让位）
+
+        // 内容卡
+        private const int CARD_L = 56;
+        private const int CARD_T = 96;
+        private const int CARD_R = W - 56;
+        private const int CARD_B = H - 96;
+
+        // 卡内留白
+        private const int PAD = 52;
+        private const int LEFT = CARD_L + PAD;          // 108
+        private const int RIGHT = CARD_R - PAD;         // 1092
+        private const int INNER_W = RIGHT - LEFT;       // 984
 
         public static Bitmap Render(QsoRecord rec)
         {
@@ -28,241 +40,196 @@ namespace HamJi.Views
             int accent = Dui.Accent;
 
             // ---------- 调色板 ----------
-            int bg0 = dark ? Dui.Mix(unchecked((int)0xFF05080E), accent, 0.13f)
-                           : Dui.Mix(unchecked((int)0xFFF8FBFF), accent, 0.05f);
-            int bg1 = dark ? unchecked((int)0xFF010306) : unchecked((int)0xFFE5EDF9);
-            int ink = dark ? unchecked((int)0xFFF2F7FF) : unchecked((int)0xFF0A1420);
-            int ink2 = dark ? unchecked((int)0xFF9DAEC2) : unchecked((int)0xFF53647A);
-            int ink3 = dark ? unchecked((int)0xFF5E7186) : unchecked((int)0xFF8A97A6);
-            int line = Dui.WithAlpha(accent, dark ? 46 : 38);
+            int bgTop = dark ? Dui.Mix(unchecked((int)0xFF0B1018), accent, 0.12f)
+                             : Dui.Mix(unchecked((int)0xFFFFFFFF), accent, 0.06f);
+            int bgBot = dark ? unchecked((int)0xFF03050A) : unchecked((int)0xFFE9EEF6);
+            int ink = dark ? unchecked((int)0xFFF4F8FF) : unchecked((int)0xFF0B1520);
+            int ink2 = dark ? unchecked((int)0xFFA9B8CA) : unchecked((int)0xFF4E6076);
+            int ink3 = dark ? unchecked((int)0xFF6D7F94) : unchecked((int)0xFF93A0AF);
+            int cardBg = dark ? Dui.Mix(unchecked((int)0xFF12171F), accent, 0.07f)
+                              : unchecked((int)0xFFFFFFFF);
+            int hair = Dui.WithAlpha(ink, dark ? 22 : 14);
 
             var bmp = Bitmap.CreateBitmap(W, H, Bitmap.Config.Argb8888);
             var cv = new Canvas(bmp);
 
-            // ---------- 1. 底：竖向渐变 ----------
-            // 注意：必须用 (int[], float[]) 这个老重载。Xamarin 的 Color / long 重载在 API 29+
-            // 会走 ColorLong 解析，半透明或 alpha=0 的颜色直接被判成非法色彩空间而抛异常。
+            // ---------- 1. 底色 ----------
+            // 必须用 (int[], float[]) 重载：Color/long 重载在 API 29+ 会按 ColorLong 解析，
+            // 半透明色会被判成非法色彩空间抛异常。
             var bg = new Paint(PaintFlags.AntiAlias);
             bg.SetShader(new LinearGradient(0f, 0f, 0f, H,
-                new[] { bg0, bg1 }, new[] { 0f, 1f }, Shader.TileMode.Clamp));
+                new[] { bgTop, bgBot }, new[] { 0f, 1f }, Shader.TileMode.Clamp));
             cv.DrawRect(0, 0, W, H, bg);
 
-            // 顶部主题色光晕（整张图的"光源"）
-            var glow = new Paint(PaintFlags.AntiAlias);
-            glow.SetShader(new RadialGradient(W * 0.84f, -H * 0.04f, W * 0.92f,
-                new[]
-                {
-                    Dui.WithAlpha(accent, dark ? 96 : 52),
-                    Dui.WithAlpha(accent, dark ? 30 : 16),
-                    Dui.WithAlpha(accent, 0)
-                },
-                new[] { 0f, 0.48f, 1f }, Shader.TileMode.Clamp));
-            cv.DrawRect(0, 0, W, (int)(H * 0.72f), glow);
+            // ---------- 2. 主题色光球（模糊感 = 多段径向渐变，边缘完全化开） ----------
+            Blob(cv, W * 0.88f, H * 0.02f, W * 0.78f, Dui.WithAlpha(accent, dark ? 120 : 70));
+            Blob(cv, W * 0.02f, H * 1.00f, W * 0.66f, Dui.WithAlpha(accent, dark ? 82 : 48));
+            Blob(cv, W * 0.50f, H * 0.62f, W * 0.70f, Dui.WithAlpha(accent, dark ? 30 : 18));
 
-            // 左下补一团冷色，避免下半张发死
-            var glow2 = new Paint(PaintFlags.AntiAlias);
-            glow2.SetShader(new RadialGradient(W * 0.1f, H * 1.02f, W * 0.8f,
-                new[]
-                {
-                    Dui.WithAlpha(accent, dark ? 44 : 26),
-                    Dui.WithAlpha(accent, 0)
-                },
-                new[] { 0f, 1f }, Shader.TileMode.Clamp));
-            cv.DrawRect(0, (int)(H * 0.45f), W, H, glow2);
+            // ---------- 3. 内容卡 ----------
+            var cardRect = new RectF(CARD_L, CARD_T, CARD_R, CARD_B);
+            var cardFill = new Paint(PaintFlags.AntiAlias);
+            cardFill.Color = new Color(cardBg);
+            cv.DrawRoundRect(cardRect, 44f, 44f, cardFill);
 
-            // ---------- 2. 细网格 ----------
-            var grid = new Paint(PaintFlags.AntiAlias);
-            grid.Color = new Color(Dui.WithAlpha(accent, dark ? 15 : 13));
-            grid.StrokeWidth = 1.2f;
-            for (int x = 0; x <= W; x += 60) cv.DrawLine(x, 0, x, H, grid);
-            for (int y = 0; y <= H; y += 60) cv.DrawLine(0, y, W, y, grid);
+            var cardStroke = new Paint(PaintFlags.AntiAlias);
+            cardStroke.SetStyle(Paint.Style.Stroke);
+            cardStroke.StrokeWidth = 2f;
+            cardStroke.Color = new Color(Dui.WithAlpha(ink, dark ? 26 : 16));
+            cv.DrawRoundRect(cardRect, 44f, 44f, cardStroke);
 
-            var grid2 = new Paint(PaintFlags.AntiAlias);
-            grid2.Color = new Color(Dui.WithAlpha(accent, dark ? 26 : 20));
-            grid2.StrokeWidth = 1.6f;
-            for (int x = 0; x <= W; x += 300) cv.DrawLine(x, 0, x, H, grid2);
-            for (int y = 0; y <= H; y += 300) cv.DrawLine(0, y, W, y, grid2);
-
-            // ---------- 3. 扫描线纹理 ----------
-            var scan = new Paint();
-            scan.Color = new Color(dark ? Dui.WithAlpha(unchecked((int)0xFF9FC4FF), 7) : Dui.WithAlpha(ink, 6));
-            for (int y = 0; y < H; y += 4) cv.DrawLine(0, y, W, y, scan);
-
-            // ---------- 4. 四角定位框 ----------
-            var bracket = new Paint(PaintFlags.AntiAlias);
-            bracket.SetStyle(Paint.Style.Stroke);
-            bracket.StrokeWidth = 3f;
-            bracket.StrokeCap = Paint.Cap.Round;
-            bracket.Color = new Color(Dui.WithAlpha(accent, dark ? 170 : 130));
-            const int inset = 46, arm = 80;
-            cv.DrawLine(inset, inset, inset + arm, inset, bracket);
-            cv.DrawLine(inset, inset, inset, inset + arm, bracket);
-            cv.DrawLine(W - inset, inset, W - inset - arm, inset, bracket);
-            cv.DrawLine(W - inset, inset, W - inset, inset + arm, bracket);
-            cv.DrawLine(inset, H - inset, inset + arm, H - inset, bracket);
-            cv.DrawLine(inset, H - inset, inset, H - inset - arm, bracket);
-            cv.DrawLine(W - inset, H - inset, W - inset - arm, H - inset, bracket);
-            cv.DrawLine(W - inset, H - inset, W - inset, H - inset - arm, bracket);
-
-            // ---------- 5. 页眉 ----------
-            var tiny = Text(20f, true, Dui.WithAlpha(accent, dark ? 235 : 220), true);
-            var tinyR = Text(26f, true, ink2, false);
-            string tag = rec.IsLog ? "HAMJI · QSO ARCHIVE" : "HAMJI · FREQ ARCHIVE";
-            DrawTracked(cv, tag, CX, 108, tiny, 7f);
-            DrawTrackedRight(cv, rec.LocalTime.ToString("yyyy.MM.dd"), W - M, 108, tinyR, 1.5f);
-
-            var h1 = Text(46f, false, ink, true);
-            cv.DrawText(rec.IsLog ? "通联日志" : "通联频率", CX, 182, h1);
-
-            var h2 = Text(30f, true, ink2, false);
-            DrawTrackedRight(cv, rec.LocalTime.ToString("HH:mm") + "  " + TimeKit.LocalAbbr(rec.Time),
-                W - M, 180, h2, 1.5f);
-
-            cv.DrawRect(CX, 218, W - M, 220, LinePaint(line, 2f));
-
-            // ---------- 6. 主视觉 ----------
-            // 左侧主题色竖条（上实下虚）
-            var barPaint = new Paint(PaintFlags.AntiAlias);
-            barPaint.SetShader(new LinearGradient(0f, 268f, 0f, 640f,
-                new[] { accent, Dui.WithAlpha(accent, 0) }, new[] { 0f, 1f }, Shader.TileMode.Clamp));
-            cv.DrawRoundRect(new RectF(M, 268, M + 7, 640), 3.5f, 3.5f, barPaint);
-
+            // ---------- 4. 页眉：类型徽标 + 日期 ----------
             bool isLog = rec.IsLog;
-            string call = string.IsNullOrWhiteSpace(rec.Call) ? "" : rec.Call.ToUpperInvariant();
-            string big = isLog
-                ? (call.Length > 0 ? call : "未知呼号")
-                : (rec.Freq > 0 ? rec.FreqText : "—");
+            float badgeTop = CARD_T + 46f;
+            DrawChip(cv, LEFT, badgeTop, isLog ? "通联日志" : "通联频率",
+                accent, Dui.WithAlpha(accent, dark ? 46 : 26), 30f, 16f);
 
-            var label = Text(23f, true, ink3, true);
-            DrawTracked(cv, isLog ? "呼号 / CALLSIGN" : "频率 / FREQUENCY", CX, 322, label, 6f);
+            string dateText = rec.LocalTime.ToString("yyyy.MM.dd");
+            var datePaint = Text(32f, false, ink3, false);
+            cv.DrawText(dateText, RIGHT - datePaint.MeasureText(dateText), badgeTop + 38f, datePaint);
+
+            // ---------- 5. 主视觉 ----------
+            float heroTop = badgeTop + 88f;
+            float heroBottom = heroTop + 404f;
+            var heroRect = new RectF(LEFT, heroTop, RIGHT, heroBottom);
+            var heroFill = new Paint(PaintFlags.AntiAlias);
+            heroFill.Color = new Color(Dui.WithAlpha(accent, dark ? 34 : 16));
+            cv.DrawRoundRect(heroRect, 34f, 34f, heroFill);
+
+            var heroStroke = new Paint(PaintFlags.AntiAlias);
+            heroStroke.SetStyle(Paint.Style.Stroke);
+            heroStroke.StrokeWidth = 2f;
+            heroStroke.Color = new Color(Dui.WithAlpha(accent, dark ? 60 : 40));
+            cv.DrawRoundRect(heroRect, 34f, 34f, heroStroke);
+
+            string call = string.IsNullOrWhiteSpace(rec.Call) ? "" : rec.Call.ToUpperInvariant();
+            bool hasCall = call.Length > 0;
+
+            var capPaint = Text(27f, true, accent, true);
+            DrawTracked(cv, isLog ? "呼号 / CALLSIGN" : "频率 / FREQUENCY",
+                LEFT + 40f, heroTop + 74f, capPaint, 5f);
 
             // 主数字：先按宽度收敛字号，再逐字描（等宽 + 字距，读数感）
-            var bigPaint = Text(150f, true, call.Length > 0 || !isLog ? ink : ink3, true);
+            string big = isLog
+                ? (hasCall ? call : "—")
+                : (rec.Freq > 0 ? rec.FreqText : "—");
+            var bigPaint = Text(196f, true, ink, true);
             const float bigTrack = 2f;
-            float bigMaxW = W - CX - M - 40;
-            while (bigPaint.TextSize > 54f && MeasureTracked(bigPaint, big, bigTrack) > bigMaxW)
-                bigPaint.TextSize -= 3f;
+            float bigMaxW = INNER_W - 80f;
+            while (bigPaint.TextSize > 96f && MeasureTracked(bigPaint, big, bigTrack) > bigMaxW)
+                bigPaint.TextSize -= 4f;
+            DrawTracked(cv, big, LEFT + 40f, heroTop + 250f, bigPaint, bigTrack);
 
-            const float bigBase = 496f;
-            DrawTracked(cv, big, CX, bigBase, bigPaint, bigTrack);
-
-            // 频率单位跟在主数字后面（只有频率类记录需要）
+            // 频点记录：主数字右边跟一个单位，和详情卡片一样
             if (!isLog && rec.Freq > 0)
             {
-                float ux = CX + MeasureTracked(bigPaint, big, bigTrack) + 18f;
-                var unit = Text(Math.Max(26f, bigPaint.TextSize * 0.24f), true, ink2, false);
-                DrawTracked(cv, rec.UnitText, ux, bigBase, unit, 2f);
+                float ux = LEFT + 40f + MeasureTracked(bigPaint, big, bigTrack) + 16f;
+                cv.DrawText(rec.UnitText, ux, heroTop + 250f, Text(44f, true, ink3, false));
             }
 
-            // 次级信息行
-            float subBase = 578f;
-            float chipTop = 612f;
+            // 次级行：日志看频率，频点看呼号（没有呼号就不画，不留占位文字）
+            float subBase = heroTop + 362f;
+            float chipLeft = LEFT + 40f;
+            string freqLine = rec.Freq > 0 ? rec.FreqText : "—";
+
             if (isLog)
             {
-                var freqPaint = Text(52f, true, accent, true);
-                string ft = rec.Freq > 0 ? rec.FreqText : "—";
-                DrawTracked(cv, ft, CX, subBase, freqPaint, 1.5f);
-                float ux = CX + MeasureTracked(freqPaint, ft, 1.5f) + 12f;
-                var unit = Text(24f, true, ink3, false);
-                DrawTracked(cv, rec.Freq > 0 ? rec.UnitText : "", ux, subBase, unit, 2f);
+                var f = Text(66f, true, accent, true);
+                DrawTracked(cv, freqLine, LEFT + 40f, subBase, f, 1.5f);
+                float ux = LEFT + 40f + MeasureTracked(f, freqLine, 1.5f) + 14f;
+                var unitPaint = Text(32f, true, ink3, false);
+                string unit = rec.Freq > 0 ? rec.UnitText : "";
+                cv.DrawText(unit, ux, subBase, unitPaint);
+                // chip 的起点必须按单位的实际宽度算，否则长呼号/长单位会把徽标压到文字上
+                chipLeft = ux + unitPaint.MeasureText(unit) + 30f;
             }
-            else
+            else if (hasCall)
             {
-                // 频率类记录：次级位置给呼号
-                var callPaint = Text(44f, true, call.Length > 0 ? ink : ink3, true);
-                DrawTracked(cv, call.Length > 0 ? call : "未记录呼号", CX, subBase, callPaint, 2f);
+                var cp = Text(58f, true, ink, true);
+                DrawTracked(cv, call, LEFT + 40f, subBase, cp, 2f);
+                chipLeft = LEFT + 40f + MeasureTracked(cp, call, 2f) + 32f;
             }
 
-            // 模式 / RST 徽标
-            float chipX = CX;
             if (!string.IsNullOrWhiteSpace(rec.Mode))
-                chipX = DrawChip(cv, chipX, chipTop, rec.Mode, accent, Dui.WithAlpha(accent, dark ? 44 : 30), 26f);
-            if (isLog && !string.IsNullOrWhiteSpace(rec.RstText))
-                DrawChip(cv, chipX + 14f, chipTop, "RST " + rec.RstText, ink2,
-                    Dui.WithAlpha(ink, dark ? 26 : 14), 26f);
-
-            // ---------- 7. 信号波形（分隔带） ----------
-            // 716f：波形上沿要压住但不碰到模式 / RST 徽标（徽标底边 666 + 波形振幅 ≈ 42）
-            DrawWave(cv, rec, accent, dark, 716f);
-
-            // ---------- 8. 读数表 ----------
-            var pairs = BuildPairs(rec, call);
-            int rows = (pairs.Count + 1) / 2;
-            const float rowH = 146f;
-            float tableTop = 768f;
-
-            var keyPaint = Text(22f, true, ink3, true);
-            var valPaint = Text(38f, false, ink, true);
-
-            for (int i = 0; i < rows; i++)
             {
-                float top = tableTop + i * rowH;
-                cv.DrawRect(CX, top, W - M, top + 1.4f, LinePaint(Dui.WithAlpha(accent, dark ? 34 : 26), 1.4f));
+                float chipRight = DrawChip(cv, chipLeft, subBase - 66f, rec.Mode,
+                    accent, Dui.WithAlpha(accent, dark ? 46 : 26), 34f, 18f);
+                if (isLog && !string.IsNullOrWhiteSpace(rec.RstText) && chipRight + 210f < RIGHT - 40f)
+                {
+                    DrawChip(cv, chipRight + 18f, subBase - 66f, "RST " + rec.RstText,
+                        ink2, Dui.WithAlpha(ink, dark ? 26 : 12), 34f, 18f);
+                }
+            }
+
+            // ---------- 6. 读数表（两列，键在上、值在下，和详情卡片一致） ----------
+            var pairs = BuildPairs(rec, call);
+            // 落单时在第二个位置补空格：这样最后的时间两格（本地 / UTC）能配到同一行，
+            // 而不是 UTC 孤零零占半行、右边一片空。
+            if (pairs.Count % 2 == 1) pairs.Insert(1, new[] { "", "" });
+
+            const float rowHMin = 128f, rowHMax = 168f;
+            float tableTop = heroBottom + 44f;
+            var keyPaint = Text(27f, false, ink3, false);
+            var valPaint = Text(46f, false, ink, true);
+
+            float footLine = CARD_B - 92f;
+            int rows = Math.Max(1, (pairs.Count + 1) / 2);
+            // 行高按剩余空间摊开（128–168px）：字段少的时候把空白吃掉，不留一大块空底
+            float reserve = string.IsNullOrWhiteSpace(rec.Notes) ? 60f : 210f;
+            float avail = footLine - reserve - tableTop;
+            float rowH = Math.Min(rowHMax, Math.Max(rowHMin, avail / rows));
+
+            for (int i = 0; i < pairs.Count; i += 2)
+            {
+                float top = tableTop + (i / 2) * rowH;
+
+                cv.DrawRect(LEFT, top, RIGHT, top + 2f, LinePaint(hair, 2f));
 
                 for (int col = 0; col < 2; col++)
                 {
-                    int idx = i * 2 + col;
-                    if (idx >= pairs.Count) break;
-                    float x = col == 0 ? CX : W * 0.52f;
-                    float maxW = (col == 0 ? W * 0.52f : W - M) - x - 24f;
-
-                    DrawTracked(cv, pairs[idx][0], x, top + 46f, keyPaint, 3.5f);
-                    DrawFit(cv, pairs[idx][1], x, top + 104f, maxW, valPaint, 38f, 24f);
+                    var cell = pairs[i + col];
+                    if (cell[0].Length == 0) continue;
+                    float x = col == 0 ? LEFT : LEFT + INNER_W * 0.54f;
+                    float maxW = col == 0 ? INNER_W * 0.54f - 40f : INNER_W * 0.46f - 40f;
+                    DrawTracked(cv, cell[0], x, top + 46f, keyPaint, 2f);
+                    DrawFit(cv, cell[1], x, top + rowH - 26f, maxW, valPaint, 46f, 30f);
                 }
             }
+
             float tableBottom = tableTop + rows * rowH;
-            cv.DrawRect(CX, tableBottom, W - M, tableBottom + 1.4f,
-                LinePaint(Dui.WithAlpha(accent, dark ? 34 : 26), 1.4f));
+            cv.DrawRect(LEFT, tableBottom, RIGHT, tableBottom + 2f, LinePaint(hair, 2f));
 
-            // ---------- 9. 备注 ----------
-            float noteY = tableBottom + 62f;
-            if (!string.IsNullOrWhiteSpace(rec.Notes) && noteY < H - 300)
+            // ---------- 7. 备注 ----------
+            float noteY = tableBottom + 74f;
+            if (!string.IsNullOrWhiteSpace(rec.Notes) && noteY < footLine - 60f)
             {
-                DrawTracked(cv, "备注 / NOTE", CX, noteY, keyPaint, 3.5f);
-                var notePaint = Text(30f, false, ink2, false);
-                var lines = Wrap(notePaint, rec.Notes.Trim(), W - CX - M, 3);
+                DrawTracked(cv, "备注 / NOTE", LEFT, noteY, keyPaint, 2f);
+                var notePaint = Text(38f, false, ink2, false);
+                var lines = Wrap(notePaint, rec.Notes.Trim(), INNER_W, 2);
                 for (int i = 0; i < lines.Count; i++)
-                    cv.DrawText(lines[i], CX, noteY + 56f + i * 46f, notePaint);
+                    cv.DrawText(lines[i], LEFT, noteY + 58f + i * 54f, notePaint);
             }
 
-            // ---------- 10. 页脚 ----------
-            // 底部刻度尺
-            var tick = new Paint();
-            tick.Color = new Color(Dui.WithAlpha(accent, dark ? 90 : 70));
-            for (int i = 0; i < 46; i++)
-            {
-                float x = CX + i * 20f;
-                if (x > W - M) break;
-                float hgt = i % 5 == 0 ? 20f : 10f;
-                tick.StrokeWidth = i % 5 == 0 ? 3f : 2f;
-                cv.DrawLine(x, H - 214f, x, H - 214f + hgt, tick);
-            }
+            // ---------- 8. 页脚 ----------
+            cv.DrawRect(LEFT, footLine, RIGHT, footLine + 2f, LinePaint(hair, 2f));
 
-            cv.DrawRect(CX, H - 178, W - M, H - 176.4f, LinePaint(line, 1.6f));
-
-            var footL = Text(24f, false, ink3, false);
-            cv.DrawText("HAM记 · 记录每一段电波", CX, H - 128, footL);
+            var footL = Text(28f, false, ink3, false);
+            cv.DrawText("HAM记 · 记录每一段电波", LEFT, footLine + 62f, footL);
 
             string de = Profile.Call;
             if (!string.IsNullOrEmpty(de))
             {
-                var footR = Text(26f, true, accent, true);
-                DrawTrackedRight(cv, "DE " + de, W - M, H - 128, footR, 3f);
+                var footR = Text(30f, true, accent, true);
+                string s = "DE " + de.ToUpperInvariant();
+                DrawTracked(cv, s, RIGHT - MeasureTracked(footR, s, 2f), footLine + 62f, footR, 2f);
             }
-
-            // ---------- 11. 暗角 ----------
-            var vig = new Paint(PaintFlags.AntiAlias);
-            vig.SetShader(new RadialGradient(W / 2f, H * 0.44f, H * 0.78f,
-                new[] { Color.Transparent, Dui.WithAlpha(Color.Black, dark ? 165 : 34) },
-                new[] { 0.52f, 1f }, Shader.TileMode.Clamp));
-            cv.DrawRect(0, 0, W, H, vig);
 
             return bmp;
         }
 
         // ================= 内容 =================
 
-        /// <summary>两列读数表的内容：只放有值的字段，最多 6 格（3 行）。</summary>
+        /// <summary>两列读数表的内容：只放有值的字段。设备 / 功率 / 天线分三格，不挤成一行。</summary>
         private static List<string[]> BuildPairs(QsoRecord rec, string call)
         {
             var list = new List<string[]>();
@@ -272,32 +239,39 @@ namespace HamJi.Views
             }
 
             Add("模式 / MODE", rec.Mode);
-            Add("信号报告 / RST", rec.RstText);
+            if (rec.IsLog) Add("信号报告 / RST", rec.RstText);
+            else Add("呼号 / CALLSIGN", call);
+
             Add("QTH / 位置", rec.Qth);
-            Add("设备 / RIG", Join(rec.Rig, rec.Power, rec.Ant));
-
-            if (!rec.IsLog) Add("呼号 / CALLSIGN", call);
-
+            Add("设备 / RIG", rec.Rig);
+            Add("功率 / PWR", rec.Power);
+            Add("天线 / ANT", rec.Ant);
             Add("本地时间 / LOCAL", rec.LocalTime.ToString("HH:mm") + " " + TimeKit.LocalAbbr(rec.Time));
             Add("协调世界时 / UTC", TimeKit.UtcHm(rec.Time) + " UTC");
-
-            return list.Count > 6 ? list.GetRange(0, 6) : list;
-        }
-
-        /// <summary>设备 / 功率 / 天线挤进同一格：读起来像一条台站配置。</summary>
-        private static string Join(params string[] parts)
-        {
-            var sb = new StringBuilder();
-            foreach (var p in parts)
-            {
-                if (string.IsNullOrWhiteSpace(p)) continue;
-                if (sb.Length > 0) sb.Append(" · ");
-                sb.Append(p.Trim());
-            }
-            return sb.ToString();
+            return list;
         }
 
         // ================= 绘制小工具 =================
+
+        /// <summary>一团柔和的主题色光：径向渐变 + 五段 alpha，边缘完全化开，看着像高斯模糊。</summary>
+        private static void Blob(Canvas cv, float cx, float cy, float r, int color)
+        {
+            int a = Color.GetAlphaComponent(color);
+            int rgb = color & 0x00FFFFFF;
+
+            var p = new Paint(PaintFlags.AntiAlias);
+            p.SetShader(new RadialGradient(cx, cy, r,
+                new[]
+                {
+                    (a << 24) | rgb,
+                    ((int)(a * 0.55f) << 24) | rgb,
+                    ((int)(a * 0.18f) << 24) | rgb,
+                    ((int)(a * 0.04f) << 24) | rgb,
+                    0
+                },
+                new[] { 0f, 0.34f, 0.62f, 0.84f, 1f }, Shader.TileMode.Clamp));
+            cv.DrawCircle(cx, cy, r, p);
+        }
 
         private static Paint Text(float size, bool mono, int color, bool bold)
         {
@@ -341,9 +315,6 @@ namespace HamJi.Views
             }
         }
 
-        private static void DrawTrackedRight(Canvas cv, string s, float right, float baseline, Paint p, float track)
-            => DrawTracked(cv, s, right - MeasureTracked(p, s, track), baseline, p, track);
-
         /// <summary>单行自适应：先缩字号，缩到底还长就截断加省略号。</summary>
         private static void DrawFit(Canvas cv, string s, float x, float baseline,
             float maxW, Paint p, float start, float min)
@@ -358,7 +329,6 @@ namespace HamJi.Views
                 return;
             }
 
-            // 逐字累加，放不下就补省略号
             var sb = new StringBuilder();
             float w = 0f;
             float ell = p.MeasureText("…");
@@ -373,60 +343,26 @@ namespace HamJi.Views
         }
 
         /// <summary>圆角徽标，返回右边界（方便接着排下一个）。</summary>
-        private static float DrawChip(Canvas cv, float x, float top, string text, int fg, int bg, float size)
+        private static float DrawChip(Canvas cv, float x, float top, string text, int fg, int bg,
+            float size, float padX)
         {
             var tp = Text(size, false, fg, true);
             float tw = tp.MeasureText(text);
-            float w = tw + 34f;
-            float h = 54f;
+            float w = tw + padX * 2f;
+            float h = size * 1.9f;
 
             var fill = new Paint(PaintFlags.AntiAlias);
             fill.Color = new Color(bg);
-            cv.DrawRoundRect(new RectF(x, top, x + w, top + h), 12f, 12f, fill);
+            cv.DrawRoundRect(new RectF(x, top, x + w, top + h), h * 0.32f, h * 0.32f, fill);
 
             var stroke = new Paint(PaintFlags.AntiAlias);
             stroke.SetStyle(Paint.Style.Stroke);
-            stroke.StrokeWidth = 1.6f;
-            stroke.Color = new Color(Dui.WithAlpha(fg, 90));
-            cv.DrawRoundRect(new RectF(x, top, x + w, top + h), 12f, 12f, stroke);
+            stroke.StrokeWidth = 1.8f;
+            stroke.Color = new Color(Dui.WithAlpha(fg, 80));
+            cv.DrawRoundRect(new RectF(x, top, x + w, top + h), h * 0.32f, h * 0.32f, stroke);
 
-            cv.DrawText(text, x + 17f, top + h / 2f + size * 0.36f, tp);
+            cv.DrawText(text, x + padX, top + h / 2f + size * 0.36f, tp);
             return x + w;
-        }
-
-        /// <summary>信号波形：按记录 Id 生成固定的随机幅度，同一条记录每次导出都长一样。</summary>
-        private static void DrawWave(Canvas cv, QsoRecord rec, int accent, bool dark, float centerY)
-        {
-            var baseLine = new Paint(PaintFlags.AntiAlias);
-            baseLine.Color = new Color(Dui.WithAlpha(accent, dark ? 40 : 30));
-            baseLine.StrokeWidth = 1.4f;
-            cv.DrawLine(CX, centerY, W - M, centerY, baseLine);
-
-            int seed = 7;
-            string id = rec.Id ?? "";
-            for (int i = 0; i < id.Length; i++) seed = unchecked(seed * 31 + id[i]);
-            seed &= 0x7FFFFFFF;
-
-            var wave = new Paint(PaintFlags.AntiAlias);
-            wave.SetStyle(Paint.Style.Stroke);
-            wave.StrokeWidth = 3f;
-            wave.StrokeCap = Paint.Cap.Round;
-            wave.StrokeJoin = Paint.Join.Round;
-            wave.Color = new Color(Dui.WithAlpha(accent, dark ? 200 : 170));
-
-            var path = new Path();
-            float x = CX;
-            path.MoveTo(x, centerY);
-            while (x < W - M)
-            {
-                seed = unchecked(seed * 1103515245 + 12345) & 0x7FFFFFFF;
-                float amp = 8f + ((seed >> 9) % 100) / 100f * 34f;
-                float half = 8f + ((seed >> 3) % 100) / 100f * 12f;
-                path.LineTo(x + half * 0.5f, centerY - amp);
-                path.LineTo(x + half, centerY);
-                x += half + 6f;
-            }
-            cv.DrawPath(path, wave);
         }
 
         /// <summary>按宽度折行（中文按字断，英文也按字断——备注里基本是中英混排，够用）。</summary>

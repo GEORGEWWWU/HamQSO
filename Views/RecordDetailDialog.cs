@@ -189,8 +189,12 @@ namespace HamJi.Views
             { TopMargin = Dui.Dp(8) };
             sub.LayoutParameters = slp;
 
+            // 次行里 chip 前面的间距只在「chip 前面真有内容」时才加，否则模式徽标会莫名右移
+            bool hasLead = false;
+
             if (isLog)
             {
+                hasLead = true;
                 // 频率 + 单位合成一行，超长直接省略（卡片宽度是固定的，长数字不能撑破布局）
                 var freq = Dui.Label(_rec.Freq > 0 ? Dui.FreqLine(_rec) : "—", 15f, Dui.Accent, true);
                 freq.SetTypeface(Dui.Mono, TypefaceStyle.Bold);
@@ -201,6 +205,7 @@ namespace HamJi.Views
             }
             else if (call.Length > 0)
             {
+                hasLead = true;
                 var c2 = Dui.Label(call, 14f, Dui.TextSecondary, true);
                 c2.SetTypeface(Dui.Mono, TypefaceStyle.Normal);
                 c2.SetSingleLine(true);
@@ -214,7 +219,7 @@ namespace HamJi.Views
                 var chip = Widgets.Chip(_rec.Mode);
                 sub.AddView(chip, new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
-                { LeftMargin = Dui.Dp(10) });
+                { LeftMargin = hasLead ? Dui.Dp(10) : 0 });
             }
             hero.AddView(sub);
             return hero;
@@ -241,6 +246,10 @@ namespace HamJi.Views
 
             var grid = Dui.VBox();
             grid.SetPadding(Dui.Dp(20), Dui.Dp(6), Dui.Dp(20), Dui.Dp(2));
+
+            // 字段数为奇数时在第二个位置补一格空的：本地时间 / UTC 才能落在同一行，
+            // 否则 UTC 会单独占左边半行，右边空一块。
+            if (cells.Count % 2 == 1) cells.Insert(1, new[] { "", "" });
 
             for (int i = 0; i < cells.Count; i += 2)
             {
@@ -313,8 +322,9 @@ namespace HamJi.Views
         private View BuildFooter()
         {
             var box = Dui.VBox();
-            // 顶部的分割线由 TicketCard 画（虚线 + 两侧缺口），这里只留出呼吸空间
-            box.SetPadding(0, Dui.Dp(10), 0, 0);
+            // 顶部的分割线由 TicketCard 画（虚线 + 两侧缺口），这里留出呼吸空间。
+            // 上边距 15dp：备注框底边到虚线的距离，比原来多 5dp，别压得太紧。
+            box.SetPadding(0, Dui.Dp(15), 0, 0);
 
             _delHint = Dui.Label("再点一次删除，删除后无法恢复", 10.5f, Dui.Danger, false);
             _delHint.SetPadding(Dui.Dp(20), Dui.Dp(9), Dui.Dp(20), 0);
