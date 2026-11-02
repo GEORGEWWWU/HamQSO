@@ -59,6 +59,8 @@ namespace HamJi.Pages
             Scroller = new ScrollView(c);
             Scroller.VerticalScrollBarEnabled = false;
             Scroller.SetOnTouchListener(new DragWatcher(this));
+            // 上下滚动（含惯性）也会打断左右滑：把展开的行收回去
+            Scroller.ScrollChange += (s2, e2) => CloseOpenRow();
             Scroller.OverScrollMode = OverScrollMode.IfContentScrolls;
             ListHost = Dui.VBox();
             Scroller.AddView(ListHost, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent));
@@ -121,7 +123,18 @@ namespace HamJi.Pages
 
         private void RaiseDrag(bool dragging)
         {
+            // 上下拖动 = 打断左右滑：先把手动展开的那一行收回去
+            if (dragging) CloseOpenRow();
             try { DragStateChanged?.Invoke(dragging); } catch { }
+        }
+
+        /// <summary>收起当前展开（露出删除钮）的那一行。</summary>
+        public void CloseOpenRow()
+        {
+            var r = _openRow;
+            if (r == null) return;
+            _openRow = null;
+            try { r.Close(); } catch { }
         }
 
         private sealed class DragWatcher : Java.Lang.Object, View.IOnTouchListener
