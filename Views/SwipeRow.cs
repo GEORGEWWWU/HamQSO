@@ -45,8 +45,8 @@ namespace HamJi.Views
             _slop = Dui.Dp(7);
             _gap = Dui.Dp(8);               // 两个圆钮之间、以及圆钮与卡片之间的间距
             _circleD = Dui.Dp(36);          // 圆钮直径
-            // 卡片让出的总宽度 = 右留白 + 删除 + 间距 + 编辑
-            _btnW = Dui.Dp(8) + _circleD * 2 + _gap;
+            // 卡片让出的总宽度 = 左间距 + 编辑 + 间距 + 删除 + 右留白
+            _btnW = Dui.Dp(8) + _circleD * 2 + _gap * 2;
 
             var lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent)
             { BottomMargin = Dui.Dp(8) };
