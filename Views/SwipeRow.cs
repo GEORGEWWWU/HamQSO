@@ -157,6 +157,8 @@ namespace HamJi.Views
                     _startTx = _content.TranslationX;
                     _dragging = false;
                     _tracking = true;
+                    // 先把手势占住：方向还没出来之前，别让外层 ScrollView 抢去当滚动
+                    Parent?.RequestDisallowInterceptTouchEvent(true);
                     // 已展开时：只有点在卡片上才接管（点右侧圆钮要留给子视图）
                     return _open && e.GetX() < Width - _btnW;
 
@@ -164,9 +166,18 @@ namespace HamJi.Views
                     if (!_tracking) return false;
                     float dx = e.RawX - _downX;
                     float dy = e.RawY - _downY;
-                    if (Math.Abs(dx) > _slop && Math.Abs(dx) > Math.Abs(dy) * 1.2f)
+                    // 明确是上下滑：立刻把手势还给外层，让列表正常滚
+                    if (Math.Abs(dy) > _slop && Math.Abs(dy) > Math.Abs(dx) * 1.2f)
+                    {
+                        _tracking = false;
+                        Parent?.RequestDisallowInterceptTouchEvent(false);
+                        return false;
+                    }
+                    if (Math.Abs(dx) > _slop && Math.Abs(dx) > Math.Abs(dy))
                     {
                         _dragging = true;
+                        // 一旦认定是左右滑，到松手为止都不许父级 ScrollView 抢走手势
+                        Parent?.RequestDisallowInterceptTouchEvent(true);
                         _content.Animate().Cancel();
                         Opened?.Invoke(this);
                         return true;
@@ -201,6 +212,7 @@ namespace HamJi.Views
                 case MotionEventActions.Up:
                 case MotionEventActions.Cancel:
                     _tracking = false;
+                    try { Parent?.RequestDisallowInterceptTouchEvent(false); } catch { }
                     if (!_dragging)
                     {
                         if (_open && e.ActionMasked == MotionEventActions.Up) Close();

@@ -139,10 +139,13 @@ namespace HamJi.Pages
 
         private sealed class DragWatcher : Java.Lang.Object, View.IOnTouchListener
         {
+            private enum Axis { None, Vertical, Horizontal }
+
             private readonly BasePage _page;
-            private readonly int _slop = Dui.Dp(6);
+            private readonly int _slopX = Dui.Dp(8);
+            private readonly int _slopY = Dui.Dp(16);   // 上下要明显更大才开始算滚动，别抢左右滑
             private float _x0, _y0;
-            private bool _active;
+            private Axis _lock;
 
             public DragWatcher(BasePage page) { _page = page; }
 
@@ -154,32 +157,34 @@ namespace HamJi.Pages
                     case MotionEventActions.Down:
                         _x0 = e.RawX;
                         _y0 = e.RawY;
-                        _active = false;
+                        _lock = Axis.None;
                         break;
+
                     case MotionEventActions.Move:
-                        if (_active) break;
-                        float dy = e.RawY - _y0, dx = e.RawX - _x0;
-                        if (Math.Abs(dy) > _slop && Math.Abs(dy) > Math.Abs(dx))
+                        if (_lock != Axis.None) break;   // 本次手势方向已经定死，不再改判
+                        float dx = Math.Abs(e.RawX - _x0);
+                        float dy = Math.Abs(e.RawY - _y0);
+                        // 先判横向：手指想左右滑的时候，中途抖一下不能把行收回去
+                        if (dx > _slopX && dx > dy * 1.15f)
                         {
-                            _active = true;
+                            _lock = Axis.Horizontal;
+                        }
+                        else if (dy > _slopY && dy > dx * 1.6f)
+                        {
+                            _lock = Axis.Vertical;
                             _page.RaiseDrag(true);
                         }
                         break;
+
                     case MotionEventActions.Up:
                     case MotionEventActions.Cancel:
-                        if (_active)
-                        {
-                            _active = false;
-                            _page.RaiseDrag(false);
-                        }
+                        if (_lock == Axis.Vertical) _page.RaiseDrag(false);
+                        _lock = Axis.None;
                         break;
                 }
                 return false;   // 必须 false，否则 ScrollView 收不到手势
             }
         }
-
-        /// <summary>当前滚动位置（给"位置没变就别重做模糊"用）。</summary>
-        public int ScrollY => Scroller.ScrollY;
 
         /// <summary>内容是否超过一屏（不够长的列表就不做"滚动时收起 FAB"这类处理）。</summary>
         public bool CanScroll
