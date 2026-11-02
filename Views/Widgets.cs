@@ -22,9 +22,9 @@ namespace HamJi.Views
         }
 
         /// <summary>
-        /// 行右侧时间：本地时间 + 时区缩写，斜杠后跟固定的 UTC 时间。
-        /// 例如「08:00 BJT / 00:00 UTC」。时区标签用更小字号 + 字距拉开，和时间本体区分开，
-        /// 颜色压到最暗一档，成百条排下来不会抢视线。
+        /// 行右侧时间：本地时间 / 固定的 UTC 时间，例如「15:55 / 07:55 UTC」。
+        /// 本地时间不加时区标签（省宽度，本地就是设备当前时区），只有 UTC 侧带一个更小更暗的标签，
+        /// 两者用斜杠分开，成百条排下来不抢视线。
         /// </summary>
         public static LinearLayout DualTime(long ms, float sp = 12f, string datePrefix = null)
         {
@@ -40,10 +40,10 @@ namespace HamJi.Views
                 box.AddView(d, dlp);
             }
 
-            box.AddView(TimeCell(TimeKit.LocalHm(ms), TimeKit.LocalAbbr(ms), sp, Dui.TextSecondary));
+            box.AddView(TimeCell(TimeKit.LocalHm(ms), null, sp, Dui.TextSecondary));
 
             var sep = Dui.Label("/", sp - 1f, Dui.WithAlpha(Dui.TextTertiary, Dui.Dark ? 120 : 140), false);
-            sep.SetPadding(Dui.Dp(4), 0, Dui.Dp(4), 0);
+            sep.SetPadding(Dui.Dp(5), 0, Dui.Dp(5), 0);
             var slp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
             { Gravity = GravityFlags.Bottom, BottomMargin = Dui.Dp(1) };
