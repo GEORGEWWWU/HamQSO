@@ -295,7 +295,7 @@ namespace HamJi
             if (_kind == RecKind.Frequency)
             {
                 AddGap();
-                _form.AddView(Field("接收时间", TimeRow()));
+                _form.AddView(Field("接收时间", TimeRow(), 0, "本地时间"));
                 AddGap();
                 _form.AddView(Field("备注", _notes));
             }
@@ -304,7 +304,7 @@ namespace HamJi
                 AddGap();
                 _form.AddView(Field("呼号", _call));
                 AddGap();
-                _form.AddView(Field("通联时间", TimeRow()));
+                _form.AddView(Field("通联时间", TimeRow(), 0, "本地时间"));
                 AddGap();
 
                 var rstRow = Dui.HBox();
@@ -409,14 +409,31 @@ namespace HamJi
             if (v.Parent is ViewGroup vg) vg.RemoveView(v);
         }
 
-        private View Field(string label, View input, int inputHeightDp = 0)
+        private View Field(string label, View input, int inputHeightDp = 0, string tag = null)
         {
             var box = Dui.VBox();
             box.SetClipChildren(false);
             box.LayoutParameters = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
-            var tv = Dui.Label(label, 11.5f, Dui.TextSecondary, true);
-            tv.LetterSpacing = 0.03f;
-            box.AddView(tv);
+
+            if (string.IsNullOrEmpty(tag))
+            {
+                var tv = Dui.Label(label, 11.5f, Dui.TextSecondary, true);
+                tv.LetterSpacing = 0.03f;
+                box.AddView(tv);
+            }
+            else
+            {
+                // 标题 + 右侧小标签（如「本地时间」）
+                var head = Dui.HBox();
+                var tv = Dui.Label(label, 11.5f, Dui.TextSecondary, true);
+                tv.LetterSpacing = 0.03f;
+                head.AddView(tv);
+                head.AddView(HamJi.Views.Widgets.Tag(tag), new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
+                { LeftMargin = Dui.Dp(7) });
+                box.AddView(head);
+            }
+
             var lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent,
                 inputHeightDp > 0 ? Dui.Dp(inputHeightDp) : ViewGroup.LayoutParams.WrapContent)
             { TopMargin = Dui.Dp(8) };

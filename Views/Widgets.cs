@@ -21,6 +21,17 @@ namespace HamJi.Views
             return tv;
         }
 
+        /// <summary>小灰标签：比 chip 更轻，用来给字段标题补一句限定（如「本地时间」）。</summary>
+        public static TextView Tag(string text)
+        {
+            var tv = Dui.Label(text, 10f, Dui.TextSecondary, true);
+            tv.LetterSpacing = 0.02f;
+            tv.SetPadding(Dui.Dp(7), Dui.Dp(1.5f), Dui.Dp(7), Dui.Dp(1.5f));
+            tv.SetBackgroundDrawable(Dui.Round(
+                Dui.WithAlpha(Dui.TextPrimary, Dui.Dark ? 30 : 15), 6));
+            return tv;
+        }
+
         /// <summary>
         /// 行右侧时间：本地时间 / 固定的 UTC 时间，例如「15:55 / 07:55 UTC」。
         /// 本地时间不加时区标签（省宽度，本地就是设备当前时区），只有 UTC 侧带一个更小更暗的标签，
