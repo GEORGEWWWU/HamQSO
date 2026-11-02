@@ -29,6 +29,10 @@ namespace HamJi.Views
         public static LinearLayout DualTime(long ms, float sp = 12f, string datePrefix = null)
         {
             var box = Dui.HBox();
+            // 整块贴左边的标题顶部，不跟着标题行垂直居中
+            box.LayoutParameters = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
+            { Gravity = GravityFlags.Top };
 
             if (!string.IsNullOrEmpty(datePrefix))
             {
@@ -36,18 +40,20 @@ namespace HamJi.Views
                 d.SetTypeface(Typeface.Create("monospace", TypefaceStyle.Normal), TypefaceStyle.Normal);
                 var dlp = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
-                { RightMargin = Dui.Dp(6), Gravity = GravityFlags.Bottom, BottomMargin = Dui.Dp(1) };
+                { RightMargin = Dui.Dp(6), Gravity = GravityFlags.Bottom };
                 box.AddView(d, dlp);
             }
 
             box.AddView(TimeCell(TimeKit.LocalHm(ms), null, sp, Dui.TextSecondary));
 
+            // 斜杠字形重心偏高，稍微下压一点才和两侧数字对齐
             var sep = Dui.Label("/", sp - 1f, Dui.WithAlpha(Dui.TextTertiary, Dui.Dark ? 120 : 140), false);
             sep.SetPadding(Dui.Dp(5), 0, Dui.Dp(5), 0);
-            var slp = new LinearLayout.LayoutParams(
+            // 用位移而不是 margin：TextView 的 margin 会连带改变测量高度，位移只影响绘制，量得准
+            sep.TranslationY = -Dui.Dpf(0.8f);
+            box.AddView(sep, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
-            { Gravity = GravityFlags.Bottom, BottomMargin = Dui.Dp(1) };
-            box.AddView(sep, slp);
+            { Gravity = GravityFlags.Bottom });
 
             box.AddView(TimeCell(TimeKit.UtcHm(ms), "UTC", sp, Dui.TextTertiary));
             return box;
