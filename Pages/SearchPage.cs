@@ -481,14 +481,6 @@ namespace HamJi.Pages
                 }
             }
 
-            if (!string.IsNullOrWhiteSpace(rec.Mode))
-            {
-                var chip = Widgets.Chip(rec.Mode);
-                l1.AddView(chip, new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
-                { LeftMargin = Dui.Dp(8) });
-            }
-
             l1.AddView(new View(Dui.Ctx), new LinearLayout.LayoutParams(0, 1, 1f));
             l1.AddView(Widgets.DualTime(rec.Time, 11.5f,
                 showDate ? rec.LocalTime.ToString("MM-dd") : null));
@@ -505,13 +497,26 @@ namespace HamJi.Pages
                 meta = string.IsNullOrWhiteSpace(rec.Notes) ? "无备注" : rec.Notes;
             }
 
+            // 第二行：模式标签打头，后面接频率 / RST / QTH 或备注
+            var l2 = Dui.HBox();
+            l2.LayoutParameters = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent)
+            { TopMargin = Dui.Dp(5) };
+
+            if (!string.IsNullOrWhiteSpace(rec.Mode))
+            {
+                var chip = Widgets.Chip(rec.Mode);
+                l2.AddView(chip, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
+                { RightMargin = Dui.Dp(8) });
+            }
+
             var ml = Dui.Label(meta, 12.5f,
                 (!rec.IsLog && string.IsNullOrWhiteSpace(rec.Notes)) ? Dui.TextTertiary : Dui.TextSecondary, false);
             ml.SetSingleLine(true);
             ml.Ellipsize = TextUtils.TruncateAt.End;
-            card.AddView(ml, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent)
-            { TopMargin = Dui.Dp(5) });
+            l2.AddView(ml, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f));
+            card.AddView(l2);
 
             if (rec.IsLog && !string.IsNullOrWhiteSpace(rec.Notes))
             {

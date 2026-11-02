@@ -107,17 +107,23 @@ namespace HamJi.Pages
             call.LetterSpacing = 0.01f;
             l1.AddView(call);
 
-            if (!string.IsNullOrWhiteSpace(rec.Mode))
-            {
-                var chip = Widgets.Chip(rec.Mode);
-                var clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent);
-                clp.LeftMargin = Dui.Dp(8);
-                l1.AddView(chip, clp);
-            }
-
             l1.AddView(new View(Dui.Ctx), new LinearLayout.LayoutParams(0, 1, 1f));
             l1.AddView(Widgets.DualTime(rec.Time));
             row.AddView(l1);
+
+            // 第二行：模式标签打头，后面接频率 / RST / QTH
+            var l2 = Dui.HBox();
+            l2.LayoutParameters = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent)
+            { TopMargin = Dui.Dp(5) };
+
+            if (!string.IsNullOrWhiteSpace(rec.Mode))
+            {
+                var chip = Widgets.Chip(rec.Mode);
+                l2.AddView(chip, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
+                { RightMargin = Dui.Dp(8) });
+            }
 
             var meta = Dui.FreqLine(rec);
             if (!string.IsNullOrWhiteSpace(rec.RstText)) meta += "   " + rec.RstText;
@@ -125,9 +131,8 @@ namespace HamJi.Pages
             var ml = Dui.Label(meta, 12.5f, Dui.TextSecondary, false);
             ml.SetSingleLine(true);
             ml.Ellipsize = TextUtils.TruncateAt.End;
-            var mlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent)
-            { TopMargin = Dui.Dp(4) };
-            row.AddView(ml, mlp);
+            l2.AddView(ml, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f));
+            row.AddView(l2);
 
             if (!string.IsNullOrWhiteSpace(rec.Notes))
             {
