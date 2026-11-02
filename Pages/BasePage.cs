@@ -58,6 +58,7 @@ namespace HamJi.Pages
 
             Scroller = new ScrollView(c);
             Scroller.VerticalScrollBarEnabled = false;
+            Scroller.SetOnTouchListener(new DragWatcher(this));
             Scroller.OverScrollMode = OverScrollMode.IfContentScrolls;
             ListHost = Dui.VBox();
             Scroller.AddView(ListHost, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent));
@@ -114,6 +115,60 @@ namespace HamJi.Pages
         {
             if (Context is MainActivity act) act.OpenSearch();
         }
+
+        /// <summary>手指拖动列表：true=拖动中，false=松手/取消（返回 false 不消费事件，滚动照旧）。</summary>
+        public event Action<bool> DragStateChanged;
+
+        private void RaiseDrag(bool dragging)
+        {
+            try { DragStateChanged?.Invoke(dragging); } catch { }
+        }
+
+        private sealed class DragWatcher : Java.Lang.Object, View.IOnTouchListener
+        {
+            private readonly BasePage _page;
+            private readonly int _slop = Dui.Dp(6);
+            private float _x0, _y0;
+            private bool _active;
+
+            public DragWatcher(BasePage page) { _page = page; }
+
+            public bool OnTouch(View v, MotionEvent e)
+            {
+                if (e == null) return false;
+                switch (e.ActionMasked)
+                {
+                    case MotionEventActions.Down:
+                        _x0 = e.RawX;
+                        _y0 = e.RawY;
+                        _active = false;
+                        break;
+                    case MotionEventActions.Move:
+                        if (_active) break;
+                        float dy = e.RawY - _y0, dx = e.RawX - _x0;
+                        if (Math.Abs(dy) > _slop && Math.Abs(dy) > Math.Abs(dx))
+                        {
+                            _active = true;
+                            _page.RaiseDrag(true);
+                        }
+                        break;
+                    case MotionEventActions.Up:
+                    case MotionEventActions.Cancel:
+                        if (_active)
+                        {
+                            _active = false;
+                            _page.RaiseDrag(false);
+                        }
+                        break;
+                }
+                return false;   // 必须 false，否则 ScrollView 收不到手势
+            }
+        }
+
+        /// <summary>内容是否超过一屏（不够长的列表就不做"滚动时收起 FAB"这类处理）。</summary>
+        public bool CanScroll
+            => Scroller.ChildCount > 0 && Scroller.Height > 0
+               && Scroller.GetChildAt(0).Height > Scroller.Height + Dui.Dp(4);
 
         private int _builtVersion = -1;
 

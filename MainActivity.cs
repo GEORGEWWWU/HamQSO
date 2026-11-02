@@ -326,11 +326,17 @@ namespace HamJi
 
         private BasePage CreatePage(int idx)
         {
-            if (idx == 0) return new FrequencyPage(this);
-            if (idx == 1) return new LogPage(this);
+            if (idx == 0) return Hook(new FrequencyPage(this));
+            if (idx == 1) return Hook(new LogPage(this));
             var s = new SettingsPage(this);
             s.Navigate += target => ShowPage(target, true);
             return s;
+        }
+
+        private BasePage Hook(BasePage page)
+        {
+            page.DragStateChanged += OnPageDrag;
+            return page;
         }
 
         private void SetFabVisible(bool visible, bool animate)
@@ -340,6 +346,11 @@ namespace HamJi
             _fab.ScaleY = 1f;
             if (visible)
             {
+                _fabHiddenByScroll = false;
+                if (_fabRestore != null) _root?.RemoveCallbacks(_fabRestore);
+                _fab.Animate().Cancel();
+                _fab.TranslationY = 0f;
+                _fab.Clickable = true;
                 _fab.Visibility = ViewStates.Visible;
                 _fab.Alpha = 1f;
             }
@@ -357,6 +368,56 @@ namespace HamJi
                     _fab.Visibility = ViewStates.Gone;
                 }
             }
+        }
+
+        // ---- 列表滚动时暂时收起新建按钮（只为提升阅读性，松手就回来）----
+        private bool _fabHiddenByScroll;
+        private Java.Lang.Runnable _fabRestore;
+
+        /// <summary>
+        /// 手指拖动列表时收起新建按钮（只为阅读性），松手立刻回来。
+        /// 收不到 UP（手势被系统抢走等）时有 4 秒兜底，不会一直藏着。
+        /// </summary>
+        private void OnPageDrag(bool dragging)
+        {
+            if (_current != 0 && _current != 1) return;         // 只有两个列表页需要
+            if (_onboard != null || _searchPage != null) return;
+            if (_currentPage == null || !_currentPage.CanScroll) return;
+            if (_fab.Visibility != ViewStates.Visible) return;   // 切页等原因本来就隐藏了
+
+            if (dragging)
+            {
+                if (!_fabHiddenByScroll)
+                {
+                    _fabHiddenByScroll = true;
+                    _fab.Animate().Cancel();
+                    _fab.Animate().Alpha(0f).TranslationY(Dui.Dpf(20f)).SetDuration(140)
+                        .WithEndAction(new Java.Lang.Runnable(() =>
+                        {
+                            if (_fabHiddenByScroll) _fab.Clickable = false;   // 透明了就别接点击
+                        }))
+                        .Start();
+                }
+
+                if (_fabRestore == null) _fabRestore = new Java.Lang.Runnable(RestoreFabAfterScroll);
+                _root.RemoveCallbacks(_fabRestore);
+                _root.PostDelayed(_fabRestore, 4000);            // 断触兜底
+            }
+            else
+            {
+                if (_fabRestore != null) _root.RemoveCallbacks(_fabRestore);
+                RestoreFabAfterScroll();
+            }
+        }
+
+        /// <summary>滚动静止（或事件丢失）后把 FAB 放回来。</summary>
+        private void RestoreFabAfterScroll()
+        {
+            if (!_fabHiddenByScroll) return;
+            _fabHiddenByScroll = false;
+            _fab.Clickable = true;
+            _fab.Animate().Cancel();
+            _fab.Animate().Alpha(1f).TranslationY(0f).SetDuration(200).Start();
         }
 
         /// <summary>打开搜索二级页：整层压在 tab 页与底部导航之上，从右侧轻微滑入。</summary>
