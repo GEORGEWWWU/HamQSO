@@ -212,8 +212,8 @@ namespace HamJi.Pages
             HamJi.Core.Touch.Press(row, 0.985f);
 
             // ic_call 的视口裁到了图形本身，视觉大小和别的 21dp 图标一致
-            var ic = Dui.Icon(Resource.Drawable.ic_call, 18, Dui.Accent);
-            row.AddView(ic, new LinearLayout.LayoutParams(Dui.Dp(18), Dui.Dp(18)));
+            var ic = Dui.Icon(Resource.Drawable.ic_call, 21, Dui.Accent);
+            row.AddView(ic, new LinearLayout.LayoutParams(Dui.Dp(21), Dui.Dp(21)));
 
             var tv = Dui.Label("我的呼号", 15f, Dui.TextPrimary, false);
             row.AddView(tv, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f)
