@@ -3,6 +3,7 @@ using Android.App;
 using Android.Content;
 using Android.Graphics;
 using Android.Graphics.Drawables;
+using Android.Text;
 using Android.Views;
 using Android.Widget;
 using HamJi.Core;
@@ -51,6 +52,13 @@ namespace HamJi.Pages
             dlp.Gravity = GravityFlags.CenterHorizontal;
             hero.AddView(desc, dlp);
             ListHost.AddView(hero);
+
+            // 呼号：单独一张卡（身份信息，不和下面的数据管理混在一起）
+            var cardCall = Widgets.Card();
+            cardCall.AddView(CallRow());
+            ListHost.AddView(cardCall);
+
+            ListHost.AddView(Gap());
 
             // 数据（无分组标题、无分割线）
             var card1 = Widgets.Card();
@@ -132,8 +140,145 @@ namespace HamJi.Pages
             return row;
         }
 
-        private void ShowThemeMenu(View anchor)
+        /// <summary>独立的呼号卡：图标比普通设置项大一档，右侧用等宽字体显示呼号。</summary>
+        private LinearLayout CallRow()
         {
+            var row = Dui.HBox();
+            row.LayoutParameters = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
+            row.SetPadding(Dui.Dp(16), Dui.Dp(14), Dui.Dp(14), Dui.Dp(14));
+            row.Clickable = true;
+            row.Focusable = true;
+            HamJi.Core.Touch.Press(row, 0.985f);
+
+            // ic_call 的视口裁到了图形本身，视觉大小和别的 21dp 图标一致
+            var ic = Dui.Icon(Resource.Drawable.ic_call, 22, Dui.Accent);
+            row.AddView(ic, new LinearLayout.LayoutParams(Dui.Dp(22), Dui.Dp(22)));
+
+            var tv = Dui.Label("我的呼号", 15f, Dui.TextPrimary, false);
+            row.AddView(tv, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f)
+            { LeftMargin = Dui.Dp(11) });
+
+            bool has = Profile.HasCall;
+            var val = Dui.Label(has ? Profile.Call : "未设置", has ? 14f : 12.5f,
+                has ? Dui.TextPrimary : Dui.TextTertiary, has);
+            if (has) val.SetTypeface(Typeface.Create("monospace", TypefaceStyle.Normal), TypefaceStyle.Normal);
+            val.LetterSpacing = has ? 0.06f : 0f;
+            val.SetSingleLine(true);
+            row.AddView(val, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
+            { RightMargin = Dui.Dp(4) });
+
+            var ch = Dui.Icon(Resource.Drawable.ic_chevron, 16, Dui.TextTertiary);
+            ch.Alpha = 0.7f;
+            row.AddView(ch, new LinearLayout.LayoutParams(Dui.Dp(16), Dui.Dp(16)) { LeftMargin = Dui.Dp(4) });
+
+            row.Click += (s, e) => EditCall();
+            return row;
+        }
+
+        /// <summary>随时修改呼号：校验不过就不让保存，且不会允许改空。</summary>
+        private void EditCall()
+        {
+            var box = Dui.VBox();
+            box.SetPadding(Dui.Dp(20), Dui.Dp(8), Dui.Dp(20), 0);
+
+            var input = new EditText(Context);
+            input.SetTextSize(Android.Util.ComplexUnitType.Sp, 18f);
+            input.SetTextColor(new Color(Dui.TextPrimary));
+            input.SetHintTextColor(new Color(Dui.WithAlpha(Dui.TextTertiary, 160)));
+            input.Hint = "BH7IDW";
+            input.SetTypeface(Typeface.Create("monospace", TypefaceStyle.Normal), TypefaceStyle.Normal);
+            input.LetterSpacing = 0.08f;
+            input.SetBackgroundDrawable(Dui.InputFieldBg());
+            input.SetPadding(Dui.Dp(14), 0, Dui.Dp(14), 0);
+            input.SetIncludeFontPadding(false);
+            input.SetSingleLine(true);
+            input.InputType = InputTypes.ClassText | InputTypes.TextFlagCapCharacters | InputTypes.TextFlagNoSuggestions;
+            input.SetFilters(new Android.Text.IInputFilter[]
+            {
+                new Android.Text.InputFilterLengthFilter(6), new CallFilter()
+            });
+            input.Text = Profile.Call ?? "";
+            try { input.SetSelection(input.Text.Length); } catch { }
+            box.AddView(input, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, Dui.Dp(50)) { TopMargin = Dui.Dp(4) });
+
+            var err = Dui.Label("", 11f, Dui.Danger, false);
+            err.Visibility = ViewStates.Gone;
+            box.AddView(err, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
+            { TopMargin = Dui.Dp(6) });
+
+            var note = Dui.Label(Profile.Rule, 11f, Dui.TextTertiary, false);
+            box.AddView(note, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
+            { TopMargin = Dui.Dp(8), BottomMargin = Dui.Dp(4) });
+
+            var dlg = new AlertDialog.Builder(Context, Resource.Style.AppDialogTheme)
+                .SetTitle("我的呼号")
+                .SetView(box)
+                .SetPositiveButton("保存", (EventHandler<DialogClickEventArgs>)null)
+                .SetNegativeButton("取消", (EventHandler<DialogClickEventArgs>)null)
+                .Create();
+
+            dlg.SetOnShowListener(new CallDialogHook(dlg, input, err, () => Refresh()));
+            dlg.Show();
+        }
+
+        private sealed class CallDialogHook : Java.Lang.Object, IDialogInterfaceOnShowListener
+        {
+            private readonly AlertDialog _dlg;
+            private readonly EditText _input;
+            private readonly TextView _err;
+            private readonly Action _onSaved;
+
+            public CallDialogHook(AlertDialog dlg, EditText input, TextView err, Action onSaved)
+            {
+                _dlg = dlg; _input = input; _err = err; _onSaved = onSaved;
+            }
+
+            public void OnShow(IDialogInterface dialog)
+            {
+                var btn = _dlg.GetButton((int)DialogButtonType.Positive);
+                if (btn != null)
+                    btn.Click += (s, e) =>
+                    {
+                        string error;
+                        if (!Profile.TrySave(_input.Text, out error))
+                        {
+                            _err.Text = error;
+                            _err.Visibility = ViewStates.Visible;
+                            _input.RequestFocus();
+                            return;
+                        }
+                        _dlg.Dismiss();
+                        Toast.MakeText(_dlg.Context, "呼号已保存：" + Profile.Call, ToastLength.Short).Show();
+                        _onSaved?.Invoke();
+                    };
+                var neg = _dlg.GetButton((int)DialogButtonType.Negative);
+                if (neg != null) neg.Click += (s, e) => _dlg.Dismiss();
+            }
+        }
+
+        /// <summary>只放行字母数字并转大写。</summary>
+        private sealed class CallFilter : Java.Lang.Object, Android.Text.IInputFilter
+        {
+            public Java.Lang.ICharSequence FilterFormatted(Java.Lang.ICharSequence source, int start, int end,
+                ISpanned dest, int dstart, int dend)
+            {
+                if (source == null) return null;
+                var raw = source.SubSequenceFormatted(start, end).ToString();
+                var sb = new System.Text.StringBuilder(raw.Length);
+                foreach (char ch in raw.ToUpperInvariant())
+                    if ((ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) sb.Append(ch);
+                var clean = sb.ToString();
+                if (clean == raw) return null;
+                return new Java.Lang.String(clean);
+            }
+        }
+
+        private void ShowThemeMenu(View anchor)        {
             var list = Dui.VBox();
             list.SetPadding(Dui.Dp(6), Dui.Dp(6), Dui.Dp(6), Dui.Dp(6));
 
@@ -219,10 +364,12 @@ namespace HamJi.Pages
                 long size = exists ? new System.IO.FileInfo(f).Length : 0;
                 var bak = System.IO.File.Exists(Store.BackupPath);
                 var saved = exists ? System.IO.File.GetLastWriteTime(f).ToString("MM-dd HH:mm") : "—";
-                info = "记录数：" + Store.All.Count + " 条\n"
+                info = "呼号：" + (Profile.HasCall ? Profile.Call : "未设置") + "\n"
+                     + "记录数：" + Store.All.Count + " 条\n"
                      + "数据文件：" + (exists ? (size < 1024 ? size + " B" : (size / 1024) + " KB") : "不存在") + "\n"
                      + "最近写入：" + saved + "\n"
                      + "备份副本：" + (bak ? "有（records.json.bak）" : "暂无") + "\n"
+                     + "呼号档案：" + (System.IO.File.Exists(Profile.FilePath) ? "有（profile.json）" : "暂无") + "\n"
                      + "写入状态：" + (Store.IsBlocked ? "已保护（检测到数据异常，暂停写入）" : "正常");
                 if (!string.IsNullOrEmpty(Store.LastError)) info += "\n提示：" + Store.LastError;
             }
@@ -240,7 +387,7 @@ namespace HamJi.Pages
 
         private void Export()
         {
-            if (Store.All.Count == 0)
+            if (Store.All.Count == 0 && !Profile.HasCall)
             {
                 Toast.MakeText(Context, "还没有可导出的记录", ToastLength.Short).Show();
                 return;
@@ -271,7 +418,8 @@ namespace HamJi.Pages
                     writer.Write(json);
                     writer.Flush();
                 }
-                Toast.MakeText(act, "已导出 " + Store.All.Count + " 条记录", ToastLength.Short).Show();
+                Toast.MakeText(act, "已导出 " + Store.All.Count + " 条记录"
+                    + (Profile.HasCall ? " · 含呼号 " + Profile.Call : ""), ToastLength.Short).Show();
             }
             catch (Exception ex)
             {
@@ -315,9 +463,10 @@ namespace HamJi.Pages
             }
 
             System.Collections.Generic.List<QsoRecord> list;
+            string backupCall;
             try
             {
-                list = Store.ParseBackup(json);
+                list = Store.ParseBackup(json, out backupCall);
             }
             catch (Exception ex)
             {
@@ -325,26 +474,45 @@ namespace HamJi.Pages
                 return;
             }
 
+            bool callUsable = !Profile.HasCall && Profile.IsValid(Profile.Normalize(backupCall));
+
             if (list.Count == 0)
             {
-                Toast.MakeText(act, "备份文件里没有记录", ToastLength.Short).Show();
+                if (callUsable)
+                {
+                    Profile.AdoptIfEmpty(backupCall);
+                    Toast.MakeText(act, "已从备份恢复呼号：" + Profile.Call, ToastLength.Short).Show();
+                }
+                else
+                {
+                    Toast.MakeText(act, "备份文件里没有记录", ToastLength.Short).Show();
+                }
                 return;
             }
 
             int have = Store.All.Count;
+            var msg = "当前已有 " + have + " 条记录。\n\n"
+                      + "合并：保留现有记录，只补充备份里没有的条目。\n"
+                      + "覆盖：清空现有记录，完全恢复成备份内容。";
+            if (!string.IsNullOrEmpty(backupCall))
+            {
+                msg += "\n\n备份里的呼号：" + Profile.Normalize(backupCall)
+                     + (Profile.HasCall ? "（保留当前呼号 " + Profile.Call + "）" : "（恢复时会一并写入）");
+            }
+
             new AlertDialog.Builder(act, Resource.Style.AppDialogTheme)
                 .SetTitle("导入 " + list.Count + " 条记录")
-                .SetMessage("当前已有 " + have + " 条记录。\n\n"
-                          + "合并：保留现有记录，只补充备份里没有的条目。\n"
-                          + "覆盖：清空现有记录，完全恢复成备份内容。")
+                .SetMessage(msg)
                 .SetPositiveButton("合并", (s, e) =>
                 {
+                    if (callUsable) Profile.AdoptIfEmpty(backupCall);
                     int n = Store.MergeIn(list);
                     Toast.MakeText(act, n > 0 ? "已导入 " + n + " 条记录" : "没有新增记录（全部已存在）",
                         ToastLength.Short).Show();
                 })
                 .SetNeutralButton("覆盖", (s, e) =>
                 {
+                    if (callUsable) Profile.AdoptIfEmpty(backupCall);
                     Store.ReplaceAll(list);
                     Toast.MakeText(act, "已恢复 " + list.Count + " 条记录", ToastLength.Short).Show();
                 })

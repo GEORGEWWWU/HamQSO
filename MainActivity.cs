@@ -44,6 +44,10 @@ namespace HamJi
         private int _topInset;
         private int _bottomInset;
 
+        // 首次启动引导（没有呼号才出现）
+        private OnboardingView _onboard;
+        private bool _onboardDone;
+
         protected override void OnCreate(Bundle savedInstanceState)
         {
             base.OnCreate(savedInstanceState);
@@ -70,6 +74,7 @@ namespace HamJi
                     ShowPage(1, false);
                 }
                 ApplyShortcut(Intent);
+                _root.Post(() => MaybeOnboard(true));
             }
             catch (System.Exception ex)
             {
@@ -357,8 +362,55 @@ namespace HamJi
                 .Start();
         }
 
+        /// <summary>
+        /// 没有呼号就弹全屏引导。呼号一旦写入（Profile 有文件 + 备份 + prefs 三重兜底），
+        /// 无论升级到哪个版本都不会再弹。
+        /// </summary>
+        private void MaybeOnboard(bool animate)
+        {
+            if (_onboardDone || _onboard != null) return;
+            if (Profile.HasCall) { _onboardDone = true; return; }
+
+            var v = new OnboardingView(this);
+            v.Confirmed += call => CloseOnboard(true);
+            v.Skipped += () => CloseOnboard(false);
+            _onboard = v;
+
+            _fab.Visibility = ViewStates.Gone;
+            _nav.Visibility = ViewStates.Invisible;
+            _root.AddView(v, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent));
+
+            if (animate) v.PlayIn();
+            else v.Alpha = 1f;
+        }
+
+        private void CloseOnboard(bool saved)
+        {
+            var v = _onboard;
+            _onboard = null;
+            _onboardDone = true;
+            if (v == null) return;
+
+            try { v.HideKeyboard(); } catch { }
+            v.Animate().Alpha(0f).SetDuration(180)
+                .WithEndAction(new Java.Lang.Runnable(() =>
+                {
+                    try { _root.RemoveView(v); } catch { }
+                    _nav.Visibility = ViewStates.Visible;
+                    SetFabVisible(_current == 0 || _current == 1, false);
+                    _root.Post(() => _nav.RefreshBlur());
+                }))
+                .Start();
+
+            if (saved)
+                Toast.MakeText(this, "呼号已保存：" + Profile.Call, ToastLength.Short).Show();
+        }
+
         public override void OnBackPressed()
         {
+            // 引导页没有返回入口
+            if (_onboard != null) return;
             if (_searchPage != null)
             {
                 CloseSearch();
@@ -408,6 +460,8 @@ namespace HamJi
                 // 首次进入时页面刚构建完，再刷新一次会闪一下（内容被清空重建），跳过
                 if (_firstResume) _firstResume = false;
                 else _currentPage?.Refresh();
+                // 跳过引导后又回到前台：呼号仍为空时补弹一次（同一会话里不重复骚扰）
+                if (!_onboardDone && _onboard == null && !Profile.HasCall) MaybeOnboard(true);
             }
             catch (System.Exception ex)
             {

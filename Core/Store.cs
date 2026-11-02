@@ -8,8 +8,17 @@ using System.Text.Json.Serialization;
 namespace HamJi.Core
 {
     [JsonSerializable(typeof(List<QsoRecord>))]
+    [JsonSerializable(typeof(ProfileFile))]
+    [JsonSerializable(typeof(BackupFile))]
     internal partial class AppJson : JsonSerializerContext
     {
+    }
+
+    /// <summary>备份文件：呼号 + 记录。老版本导出的纯数组也能读。</summary>
+    public class BackupFile
+    {
+        public string Call { get; set; } = "";
+        public List<QsoRecord> Records { get; set; } = new List<QsoRecord>();
     }
 
     /// <summary>本地存储：单文件 JSON，原子写入，无外部依赖、无需权限。</summary>
@@ -234,18 +243,41 @@ namespace HamJi.Core
             Changed?.Invoke();
         }
 
+        /// <summary>导出 JSON：呼号 + 全部记录（呼号跟着备份走，换机恢复不丢）。</summary>
         public static string ToJson()
         {
             EnsureLoaded();
             var sorted = _items.OrderByDescending(x => x.Time).ToList();
-            return JsonSerializer.Serialize(sorted, AppJson.Default.ListQsoRecord);
+            var bak = new BackupFile { Call = Profile.Call ?? "", Records = sorted };
+            return JsonSerializer.Serialize(bak, AppJson.Default.BackupFile);
         }
 
         /// <summary>解析备份 JSON，返回已归一化的记录列表（不写入存储）。</summary>
         public static List<QsoRecord> ParseBackup(string json)
         {
+            string ignored;
+            return ParseBackup(json, out ignored);
+        }
+
+        /// <summary>解析备份，兼容新格式（对象）与老格式（纯数组），并带出备份里的呼号。</summary>
+        public static List<QsoRecord> ParseBackup(string json, out string call)
+        {
+            call = "";
             if (string.IsNullOrWhiteSpace(json)) throw new FormatException("文件内容为空");
-            var list = JsonSerializer.Deserialize(json, AppJson.Default.ListQsoRecord);
+
+            var text = json.TrimStart('\uFEFF', ' ', '\r', '\n', '\t');
+            List<QsoRecord> list;
+            if (text.StartsWith("{"))
+            {
+                var bak = JsonSerializer.Deserialize(text, AppJson.Default.BackupFile);
+                if (bak == null) throw new FormatException("不是有效的备份文件");
+                call = bak.Call ?? "";
+                list = bak.Records;
+            }
+            else
+            {
+                list = JsonSerializer.Deserialize(text, AppJson.Default.ListQsoRecord);
+            }
             if (list == null) throw new FormatException("不是有效的备份文件");
             NormalizeList(list);
             return list;
