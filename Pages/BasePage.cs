@@ -304,49 +304,14 @@ namespace HamJi.Pages
             return swipe;
         }
 
+        /// <summary>点卡片 → 自绘详情大卡片（删除 / 关闭 / 分享都在卡片底部固定栏）。</summary>
         protected void ShowDetail(QsoRecord rec)
         {
-            var sb = new System.Text.StringBuilder();
-            if (rec.IsLog)
-            {
-                sb.AppendLine("呼号： " + (string.IsNullOrWhiteSpace(rec.Call) ? "—" : rec.Call));
-                sb.AppendLine("频率： " + Dui.FreqLine(rec));
-                sb.AppendLine("模式： " + (string.IsNullOrWhiteSpace(rec.Mode) ? "—" : rec.Mode));
-                sb.AppendLine("时间： " + rec.LocalTime.ToString("yyyy-MM-dd HH:mm"));
-                sb.AppendLine("信号报告： " + (string.IsNullOrWhiteSpace(rec.RstText) ? "—" : rec.RstText));
-                if (!string.IsNullOrWhiteSpace(rec.Qth)) sb.AppendLine("QTH： " + rec.Qth);
-                if (!string.IsNullOrWhiteSpace(rec.Rig)) sb.AppendLine("设备： " + rec.Rig);
-                if (!string.IsNullOrWhiteSpace(rec.Power)) sb.AppendLine("功率： " + rec.Power);
-                if (!string.IsNullOrWhiteSpace(rec.Ant)) sb.AppendLine("天线： " + rec.Ant);
-            }
-            else
-            {
-                sb.AppendLine("频率： " + Dui.FreqLine(rec));
-                sb.AppendLine("模式： " + (string.IsNullOrWhiteSpace(rec.Mode) ? "—" : rec.Mode));
-                sb.AppendLine("接收时间： " + rec.LocalTime.ToString("yyyy-MM-dd HH:mm"));
-            }
-            if (!string.IsNullOrWhiteSpace(rec.Notes)) sb.AppendLine("备注： " + rec.Notes);
-
-            new AlertDialog.Builder(Context, Resource.Style.AppDialogTheme)
-                .SetTitle("记录详情")
-                .SetMessage(sb.ToString().TrimEnd())
-                .SetPositiveButton("关闭", (s, e) => { })
-                .SetNeutralButton("删除", (s, e) => ConfirmDelete(rec))
-                .Show();
-        }
-
-        protected void ConfirmDelete(QsoRecord rec)
-        {
-            new AlertDialog.Builder(Context, Resource.Style.AppDialogTheme)
-                .SetTitle("删除这条记录？")
-                .SetMessage("删除后无法恢复。")
-                .SetNegativeButton("取消", (s, e) => { })
-                .SetPositiveButton("删除", (s, e) =>
-                {
-                    Store.Remove(rec.Id);
-                    Refresh();
-                })
-                .Show();
+            if (rec == null) return;
+            var dlg = new RecordDetailDialog(Context, rec);
+            // 删除是在弹窗里二次确认后直接落库的，这里只负责刷新列表
+            dlg.Deleted += Refresh;
+            dlg.Show();
         }
     }
 }
