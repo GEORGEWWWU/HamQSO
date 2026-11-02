@@ -75,7 +75,7 @@ namespace HamJi.Views
     {
         private Bitmap _thumb;
         private Rect _src;
-        private readonly Paint _bmpPaint = new Paint(PaintFlags.FilterBitmap);
+        private readonly Paint _bmpPaint = new Paint(PaintFlags.FilterBitmap | PaintFlags.Dither);
         private readonly Paint _tint = new Paint(PaintFlags.AntiAlias);
         private readonly Paint _border = new Paint(PaintFlags.AntiAlias);
         private readonly Paint _sheen = new Paint(PaintFlags.AntiAlias);
@@ -138,10 +138,10 @@ namespace HamJi.Views
             if (Backdrop == null || Backdrop.Width <= 0 || Width <= 0 || Height <= 0) return;
             try
             {
-                // 0.09 已经够糊；再低会糊成一片色块，再高白花 CPU
-                const float scale = 0.09f;
-                int tw = Math.Max(4, (int)(Backdrop.Width * scale));
-                int th = Math.Max(4, (int)(Backdrop.Height * scale));
+                // 采样精度：太低会糊成色块、边缘还会被 alpha 拖脏，0.14 是清晰度和开销的平衡点
+                const float scale = 0.14f;
+                int tw = Math.Max(8, (int)(Backdrop.Width * scale));
+                int th = Math.Max(8, (int)(Backdrop.Height * scale));
 
                 var locA = new int[2];
                 var locS = new int[2];
@@ -153,17 +153,22 @@ namespace HamJi.Views
                 var bmp = Bitmap.CreateBitmap(tw, th, Bitmap.Config.Argb8888);
                 var canvas = new Canvas(bmp);
                 canvas.Scale(scale, scale);
-                // 只光栅化面板自己盖住的那一条，别把整页内容都画一遍
-                canvas.ClipRect(ox, oy, ox + Width, oy + Height);
 
+                // 先整张铺底（就是背景渐变，很便宜），保证 alpha 全是 255。
+                // 否则只画一条带，模糊会把带外的透明像素混进来，面板上就会出现发白的硬边矩形。
                 Backdrop.Draw(canvas);
+
                 if (Content != null && Content.Width > 0)
                 {
                     try
                     {
+                        // 内容才是贵的（整页文字都要光栅化），只画面板附近这一带；
+                        // 外扩一点给模糊留邻域，边缘才不会发灰
+                        int pad = Dui.Dp(16);
                         var locC = new int[2];
                         Content.GetLocationInWindow(locC);
                         canvas.Save();
+                        canvas.ClipRect(ox - pad, oy - pad, ox + Width + pad, oy + Height + pad);
                         canvas.Translate(locC[0] - locA[0], locC[1] - locA[1]);
                         Content.Draw(canvas);
                         canvas.Restore();
@@ -171,15 +176,21 @@ namespace HamJi.Views
                     catch { }
                 }
 
-                ImgBlur.Box(bmp, 4);
+                // 半径按「真实 dp」折算：玻璃感 ≈ 14dp，避免不同采样率下忽轻忽重
+                int radius = Math.Max(1, (int)Math.Round(Dui.Dpf(14f) * scale));
+                ImgBlur.Box(bmp, radius);
 
                 var src = new Rect();
-                src.Set((int)(ox * scale), (int)(oy * scale), (int)((ox + Width) * scale), (int)((oy + Height) * scale));
+                src.Set((int)Math.Floor(ox * scale), (int)Math.Floor(oy * scale),
+                        (int)Math.Ceiling((ox + Width) * scale), (int)Math.Ceiling((oy + Height) * scale));
                 src.Intersect(0, 0, tw, th);
 
                 // 原子替换：新图就绪后才切换，中间不会出现"只有底色"的一帧
-                _thumb = bmp;
-                _src = src;
+                if (!src.IsEmpty)
+                {
+                    _thumb = bmp;
+                    _src = src;
+                }
             }
             catch
             {
