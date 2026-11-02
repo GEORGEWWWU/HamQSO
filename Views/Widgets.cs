@@ -29,18 +29,22 @@ namespace HamJi.Views
         public static LinearLayout DualTime(long ms, float sp = 12f, string datePrefix = null)
         {
             var box = Dui.HBox();
-            // 整块贴左边的标题顶部，不跟着标题行垂直居中
+            // 整块贴左边的标题顶部，不跟着标题行垂直居中。
+            // 但「贴顶」对齐的是 View 盒子的顶边，大字号标题的 ascent 更大、墨迹反而更靠下，
+            // 实测 18.5/21sp 标题的墨迹顶比 12sp 数字的墨迹顶低 6px（2.4dp），
+            // 这里补掉这段差，让两边墨迹真正齐平。
             box.LayoutParameters = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
             { Gravity = GravityFlags.Top };
+            box.TranslationY = Dui.Dpf(2.4f);
 
             if (!string.IsNullOrEmpty(datePrefix))
             {
-                var d = Dui.Label(datePrefix, Math.Max(9f, sp - 2f), Dui.TextTertiary, false);
+                var d = Dui.Label(datePrefix, sp, Dui.TextTertiary, false);
                 d.SetTypeface(Typeface.Create("monospace", TypefaceStyle.Normal), TypefaceStyle.Normal);
                 var dlp = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
-                { RightMargin = Dui.Dp(6), Gravity = GravityFlags.Bottom };
+                { RightMargin = Dui.Dp(8), Gravity = GravityFlags.Bottom };
                 box.AddView(d, dlp);
             }
 
