@@ -175,6 +175,42 @@ namespace HamJi
             }
         }
 
+        /// <summary>
+        /// 换主题色：就地重建界面，不走 Activity.Recreate()。
+        /// Recreate 会走一遍窗口销毁/重建，中间必然露一帧系统背景，看起来就是闪一下。
+        /// 这里在同一个消息里换掉整棵视图树，不会被绘制打断，切换是「瞬间变色」而不是「闪一下」。
+        /// </summary>
+        internal void ReloadTheme()
+        {
+            try
+            {
+                int keep = _current < 0 ? 1 : _current;
+
+                // 重算调色板（Dui.Init 会把颜色重新读一遍，再按新主题覆盖强调色）
+                Dui.Init(this);
+                AppTheme.Apply();
+                _themeAtBuild = AppTheme.Current;
+                _darkAtBuild = Dui.Dark;
+                ApplyBarIcons();
+
+                // 旧页面里存的是旧配色，必须丢掉重建
+                _pages[0] = null;
+                _pages[1] = null;
+                _pages[2] = null;
+                _currentPage = null;
+                _searchPage = null;
+                _searchLayer = null;
+
+                BuildUi();
+                ShowPage(keep, false);
+                _root.Post(() => _nav.RefreshBlur());
+            }
+            catch (System.Exception ex)
+            {
+                Crash.Save(this, "ReloadTheme: " + ex);
+            }
+        }
+
         private void BuildUi()
         {
             _root = new FrameLayout(this);

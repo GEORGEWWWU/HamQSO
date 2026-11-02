@@ -367,7 +367,9 @@ namespace HamJi.Pages
                     _themePop?.Dismiss();
                     if (idx == AppTheme.Current) return;
                     AppTheme.Set(Context, idx);
-                    if (Context is Activity act) act.Recreate();
+                    // 就地重建，不走 Recreate（Recreate 会露一帧系统背景，看起来像闪屏）
+                    if (Context is MainActivity main) main.ReloadTheme();
+                    else if (Context is Activity act) act.Recreate();
                 };
                 list.AddView(row, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, Dui.Dp(42)));
             }
