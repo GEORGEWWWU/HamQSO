@@ -57,6 +57,8 @@ namespace HamJi
             _themeAtBuild = AppTheme.Current;
             _darkAtBuild = Dui.Dark;
             Crash.Install(this);
+            // 探测一次屏幕 HDR 能力：结果写日志，预览时决定要不要切窗口色彩模式
+            HdrDisplay.Probe(this);
             try
             {
                 SetupWindow();

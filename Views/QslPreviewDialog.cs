@@ -27,6 +27,7 @@ namespace HamJi.Views
 
         private readonly QslView _view;
         private readonly Bitmap _bmp;
+        private readonly bool _windowHdr;
 
         public static void Show(Context c, string path, Action onReplace)
         {
@@ -37,7 +38,8 @@ namespace HamJi.Views
                 return;
             }
 
-            var dlg = new QslPreviewDialog(c, bmp, onReplace);
+            bool hdr = HdrDisplay.IsHdr(bmp);
+            var dlg = new QslPreviewDialog(c, bmp, onReplace, hdr);
             try
             {
                 dlg.Show();
@@ -49,7 +51,7 @@ namespace HamJi.Views
             }
         }
 
-        private QslPreviewDialog(Context c, Bitmap bmp, Action onReplace)
+        private QslPreviewDialog(Context c, Bitmap bmp, Action onReplace, bool hdrContent)
             : base(c, Resource.Style.TransparentDialogTheme)
         {
             _bmp = bmp;
@@ -69,8 +71,16 @@ namespace HamJi.Views
             win.SetBackgroundDrawable(new ColorDrawable(new Color(bgColor)));
             // 沉浸：隐藏状态栏，图片直接顶到屏幕边缘
             win.AddFlags(WindowManagerFlags.Fullscreen);
-            win.AddFlags(WindowManagerFlags.DimBehind);
-            win.SetDimAmount(1f);
+            // HDR：只有内容本身是 HDR 才切色彩模式，SDR 卡片留在默认模式，避免被系统色调映射弄灰
+            bool windowHdr = hdrContent && HdrDisplay.EnableWindow(win);
+            _windowHdr = windowHdr;
+            // HDR 下不再压暗底层：全屏不透明窗口本来就盖住了，额外的 dim 会参与合成，个别 ROM 会掉 HDR
+            if (!windowHdr)
+            {
+                win.AddFlags(WindowManagerFlags.DimBehind);
+                win.SetDimAmount(1f);
+            }
+            Android.Util.Log.Info("HamJiHdr", "preview window hdr=" + windowHdr + " contentHdr=" + hdrContent);
             var lp = win.Attributes;
             lp.Gravity = GravityFlags.Center;
             lp.Width = ViewGroup.LayoutParams.MatchParent;
@@ -164,6 +174,14 @@ namespace HamJi.Views
             base.Show();
             try { Window?.SetLayout(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent); }
             catch { }
+
+            // 窗口真正挂到 SurfaceFlinger 之后再补一次色彩模式：
+            // 部分 ROM（HyperOS / ColorOS 等）只在 surface 创建后读这个值
+            if (_windowHdr)
+            {
+                try { HdrDisplay.EnableWindow(Window); }
+                catch (Exception ex) { Android.Util.Log.Info("HamJiHdr", "Show 后设置 HDR 失败：" + ex.Message); }
+            }
         }
 
         public override void Dismiss()
