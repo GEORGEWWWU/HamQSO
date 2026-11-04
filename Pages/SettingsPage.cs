@@ -62,7 +62,6 @@ namespace HamJi.Pages
 
             // 数据（无分组标题、无分割线）
             var card1 = Widgets.Card();
-            card1.AddView(Row(Resource.Drawable.ic_info, "数据自检", "查看", ShowDataStatus));
             card1.AddView(Row(Resource.Drawable.ic_export, "导出备份", "JSON", Export));
             card1.AddView(Row(Resource.Drawable.ic_import, "导入恢复", "JSON", Import));
             card1.AddView(Row(Resource.Drawable.ic_trash, "清空全部记录", "", ClearAll, true));
@@ -414,37 +413,6 @@ namespace HamJi.Pages
             {
                 Toast.MakeText(Context, "无法打开浏览器：" + ex.Message, ToastLength.Short).Show();
             }
-        }
-
-        private void ShowDataStatus()
-        {
-            string info;
-            try
-            {
-                var f = Store.FilePath;
-                var exists = System.IO.File.Exists(f);
-                long size = exists ? new System.IO.FileInfo(f).Length : 0;
-                var bak = System.IO.File.Exists(Store.BackupPath);
-                var saved = exists ? System.IO.File.GetLastWriteTime(f).ToString("MM-dd HH:mm") : "—";
-                info = "呼号：" + (Profile.HasCall ? Profile.Call : "未设置") + "\n"
-                     + "记录数：" + Store.All.Count + " 条\n"
-                     + "数据文件：" + (exists ? (size < 1024 ? size + " B" : (size / 1024) + " KB") : "不存在") + "\n"
-                     + "最近写入：" + saved + "\n"
-                     + "备份副本：" + (bak ? "有（records.json.bak）" : "暂无") + "\n"
-                     + "呼号档案：" + (System.IO.File.Exists(Profile.FilePath) ? "有（profile.json）" : "暂无") + "\n"
-                     + "写入状态：" + (Store.IsBlocked ? "已保护（检测到数据异常，暂停写入）" : "正常");
-                if (!string.IsNullOrEmpty(Store.LastError)) info += "\n提示：" + Store.LastError;
-            }
-            catch (Exception ex)
-            {
-                info = "读取状态失败：" + ex.Message;
-            }
-
-            new AlertDialog.Builder(Context, Resource.Style.AppDialogTheme)
-                .SetTitle("数据自检")
-                .SetMessage(info)
-                .SetPositiveButton("关闭", (s2, e2) => { })
-                .Show();
         }
 
         private void Export()

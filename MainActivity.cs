@@ -86,7 +86,11 @@ namespace HamJi
             if (IsFinishing || IsDestroyed) return;
             try
             {
-                Store.EnsureLoaded();
+                // 启动自检统一汇总成一条 Toast，加载阶段的 Store.Error 不再单独弹
+                _selfChecking = true;
+                try { Store.EnsureLoaded(); }
+                finally { _selfChecking = false; }
+                ReportSelfCheck();
 
                 int idx = savedInstanceState != null ? savedInstanceState.GetInt("tab", 1) : 1;
                 ShowPage(idx, false);
@@ -97,6 +101,24 @@ namespace HamJi
             {
                 Crash.Save(this, "LateStart: " + ex);
             }
+        }
+
+        /// <summary>自检无问题就完全静默（无 Toast、无弹窗）；有问题只给一条 Toast，不拦任何操作。</summary>
+        private void ReportSelfCheck()
+        {
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                string issue;
+                try { issue = DataCheck.Run(); }
+                catch { return; }
+
+                if (string.IsNullOrEmpty(issue)) return;
+                _root?.Post(() =>
+                {
+                    if (IsFinishing || IsDestroyed) return;
+                    Toast.MakeText(this, "数据自检：" + issue, ToastLength.Long).Show();
+                });
+            });
         }
 
         protected override void OnSaveInstanceState(Bundle outState)
@@ -635,8 +657,12 @@ namespace HamJi
 
         private void OnStoreError(string msg)
         {
+            // 启动自检阶段由 DataCheck 统一汇总提示，避免同一条异常连弹两次
+            if (_selfChecking) return;
             _root?.Post(() => Toast.MakeText(this, msg, ToastLength.Short).Show());
         }
+
+        private bool _selfChecking;
 
         internal void RelayoutBlur() => _nav?.RefreshBlur();
 
