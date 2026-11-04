@@ -365,7 +365,25 @@ namespace HamJi.Pages
             _qslValue = val;
             ApplyQslValue();
             row.Click += (s, e) => PickQsl();
+            // 长按删除：卡片一旦上传没有任何入口能删，留一个明确的出口
+            row.LongClick += (s, e) => { e.Handled = true; RemoveQsl(); };
             return row;
+        }
+
+        private void RemoveQsl()
+        {
+            if (!Qsl.Has) return;
+            new AlertDialog.Builder(Context, Resource.Style.AppDialogTheme)
+                .SetTitle("删除 QSL 卡片？")
+                .SetMessage("删除后卡片图片会被清掉，可以重新上传。")
+                .SetNegativeButton("取消", (s, e) => { })
+                .SetPositiveButton("删除", (s, e) =>
+                {
+                    Qsl.Clear();
+                    ApplyQslValue();
+                    Toast.MakeText(Context, "已删除卡片", ToastLength.Short).Show();
+                })
+                .Show();
         }
 
         /// <summary>右侧文案随状态切换：未上传走三级文字色，已上传用主题强调色（换主题即时生效）。</summary>
@@ -381,9 +399,18 @@ namespace HamJi.Pages
         /// <summary>导入成功后刷新右侧文案（由 Activity 回调）。</summary>
         internal void RefreshQslValue() => ApplyQslValue();
 
-        /// <summary>首次上传才提示「只存本机 / 备份不含卡片」，之后直接进系统选图。</summary>
+        /// <summary>
+        /// 已有卡片：先全屏预览（取消 / 分享 / 更新卡片），更新才进选图；
+        /// 没有卡片：首次给一次本地存储提示，之后直接进系统选图。
+        /// </summary>
         private void PickQsl()
         {
+            if (Qsl.Has)
+            {
+                QslPreviewDialog.Show(Context, Qsl.Main, OpenQslPicker);
+                return;
+            }
+
             if (Qsl.Warned)
             {
                 OpenQslPicker();

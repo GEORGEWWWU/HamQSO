@@ -132,6 +132,20 @@ namespace HamJi.Core
             }
         }
 
+        /// <summary>清空所有卡片（用于「删除卡片」，删完回到未上传状态）。</summary>
+        public static void Clear()
+        {
+            try
+            {
+                if (!Directory.Exists(DirPath)) return;
+                foreach (var f in Directory.GetFiles(DirPath))
+                {
+                    try { File.Delete(f); } catch { }
+                }
+            }
+            catch { }
+        }
+
         /// <summary>只保留最新的 MaxCount 张，其余删除（替换 upload 时不会留下旧图）。</summary>
         private static void Trim()
         {
@@ -147,6 +161,70 @@ namespace HamJi.Core
                 }
             }
             catch { }
+        }
+
+        /// <summary>
+        /// 预览用位图：按需采样（长边上限 2560，避免大图 OOM），并纠正相机照片的 EXIF 方向。
+        /// 返回的 Bitmap 由调用方负责 Recycle。
+        /// </summary>
+        public static Android.Graphics.Bitmap LoadBitmap(string path)
+        {
+            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
+
+            try
+            {
+                var bounds = new Android.Graphics.BitmapFactory.Options { InJustDecodeBounds = true };
+                Android.Graphics.BitmapFactory.DecodeFile(path, bounds);
+                if (bounds.OutWidth <= 0 || bounds.OutHeight <= 0) return null;
+
+                int sample = 1;
+                int maxSide = Math.Max(bounds.OutWidth, bounds.OutHeight);
+                while (maxSide / (sample * 2) >= 2560) sample *= 2;
+
+                var opt = new Android.Graphics.BitmapFactory.Options { InSampleSize = sample };
+                var bmp = Android.Graphics.BitmapFactory.DecodeFile(path, opt);
+                if (bmp == null) return null;
+
+                return ApplyExif(bmp, path);
+            }
+            catch { return null; }
+        }
+
+        /// <summary>相机/相册里的图常带旋转标记，BitmapFactory 不认，得自己转。</summary>
+        private static Android.Graphics.Bitmap ApplyExif(Android.Graphics.Bitmap bmp, string path)
+        {
+            int deg = 0;
+            bool mirror = false;
+            try
+            {
+#pragma warning disable CA1422
+                var exif = new Android.Media.ExifInterface(path);
+                int o = exif.GetAttributeInt(Android.Media.ExifInterface.TagOrientation, 1);
+#pragma warning restore CA1422
+                switch (o)
+                {
+                    case 3: deg = 180; break;
+                    case 6: deg = 90; break;
+                    case 8: deg = 270; break;
+                    case 2: mirror = true; break;
+                    case 5: deg = 90; mirror = true; break;
+                    case 7: deg = 270; mirror = true; break;
+                }
+            }
+            catch { return bmp; }
+
+            if (deg == 0 && !mirror) return bmp;
+
+            try
+            {
+                var m = new Android.Graphics.Matrix();
+                if (deg != 0) m.PostRotate(deg);
+                if (mirror) m.PostScale(-1f, 1f);
+                var rotated = Android.Graphics.Bitmap.CreateBitmap(bmp, 0, 0, bmp.Width, bmp.Height, m, true);
+                if (rotated != null && rotated != bmp) bmp.Recycle();
+                return rotated ?? bmp;
+            }
+            catch { return bmp; }
         }
 
         private static DateTime SafeWriteTime(string path)
