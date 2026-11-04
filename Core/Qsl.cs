@@ -132,6 +132,36 @@ namespace HamJi.Core
             }
         }
 
+        /// <summary>
+        /// 图片平均亮度（0 黑 ~ 1 白）：预览背景要跟图片反着来，否则黑底配黑图整块糊在一起。
+        /// 缩到 16×16 采样，几十毫秒的事。
+        /// </summary>
+        public static float Luma(Android.Graphics.Bitmap bmp)
+        {
+            if (bmp == null || bmp.IsRecycled || bmp.Width <= 0 || bmp.Height <= 0) return 0.5f;
+            Android.Graphics.Bitmap small = null;
+            try
+            {
+                small = Android.Graphics.Bitmap.CreateScaledBitmap(bmp, 16, 16, false);
+                if (small == null) return 0.5f;
+                var px = new int[16 * 16];
+                small.GetPixels(px, 0, 16, 0, 0, 16, 16);
+
+                double sum = 0;
+                foreach (int p in px)
+                {
+                    int r = (p >> 16) & 0xFF, g = (p >> 8) & 0xFF, b = p & 0xFF;
+                    sum += 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                }
+                return (float)(sum / px.Length / 255.0);
+            }
+            catch { return 0.5f; }
+            finally
+            {
+                try { if (small != null && !small.IsRecycled) small.Recycle(); } catch { }
+            }
+        }
+
         /// <summary>清空所有卡片（用于「删除卡片」，删完回到未上传状态）。</summary>
         public static void Clear()
         {

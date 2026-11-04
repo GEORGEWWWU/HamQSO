@@ -11,14 +11,20 @@ using HamJi.Core;
 namespace HamJi.Views
 {
     /// <summary>
-    /// QSL 卡片全屏预览：整屏纯黑、图片无边框无阴影直接铺开，
+    /// QSL 卡片全屏预览：图片无边框无阴影直接铺开，
     /// 底部固定悬浮「取消 / 分享 / 更新卡片」三个小按钮。
+    ///
+    /// 背景按图片亮度自动反色：浅色卡片用深色底，深色卡片用浅色底，
+    /// 否则「黑底 + 黑卡片」整块糊在一起看不出边界。按钮 / 关闭钮的颜色跟着一起反。
     ///
     /// 交互与分享海报预览一致：轻点图片在「适合宽度 / 原始尺寸」之间切换，
     /// 放大后可拖动，点图片以外的区域退出（右上角另有明确的关闭按钮）。
     /// </summary>
     public class QslPreviewDialog : Dialog
     {
+        /// <summary>底部按钮带高度：只够放下 32dp 的药丸 + 20dp 外边距，不多占图片空间。</summary>
+        private const int BarSpaceDp = 62;
+
         private readonly QslView _view;
         private readonly Bitmap _bmp;
 
@@ -48,9 +54,19 @@ namespace HamJi.Views
         {
             _bmp = bmp;
 
+            // 深色卡片 → 浅色背景；浅色卡片 → 深色背景。0.42 是实测下来两边都够分明的分界
+            float luma = Qsl.Luma(bmp);
+            bool light = luma < 0.42f;
+            Android.Util.Log.Info("HamJiQsl", "preview luma=" + luma.ToString("0.000") + " lightBg=" + light);
+            int bgColor = light ? unchecked((int)0xFFF3F3F4) : unchecked((int)0xFF000000);
+            int fgColor = light ? unchecked((int)0xFF1B1B1D) : Color.White;
+            int pillBg = light ? unchecked((int)0x14000000) : unchecked((int)0x24FFFFFF);
+            int pillBgPrimary = light ? unchecked((int)0x1F000000) : unchecked((int)0x3DFFFFFF);
+            int closeBg = light ? unchecked((int)0x14000000) : unchecked((int)0x59000000);
+
             Window.RequestFeature(WindowFeatures.NoTitle);
             var win = Window;
-            win.SetBackgroundDrawable(new ColorDrawable(Color.Black));
+            win.SetBackgroundDrawable(new ColorDrawable(new Color(bgColor)));
             // 沉浸：隐藏状态栏，图片直接顶到屏幕边缘
             win.AddFlags(WindowManagerFlags.Fullscreen);
             win.AddFlags(WindowManagerFlags.DimBehind);
@@ -63,7 +79,7 @@ namespace HamJi.Views
             SetCanceledOnTouchOutside(false);
 
             var root = new FrameLayout(c);
-            root.SetBackgroundColor(Color.Black);
+            root.SetBackgroundColor(new Color(bgColor));
 
             _view = new QslView(c, bmp);
             _view.CloseRequested += Dismiss;
@@ -72,8 +88,8 @@ namespace HamJi.Views
 
             // 右上角关闭：点图片是切尺寸，得留一个明确的退出入口
             var close = new FrameLayout(c);
-            close.SetBackgroundDrawable(Dui.Round(unchecked((int)0x59000000), 20));
-            var ci = Dui.Icon(Resource.Drawable.ic_close, 17, Color.White);
+            close.SetBackgroundDrawable(Dui.Round(closeBg, 20));
+            var ci = Dui.Icon(Resource.Drawable.ic_close, 17, fgColor);
             close.AddView(ci, new FrameLayout.LayoutParams(Dui.Dp(17), Dui.Dp(17)) { Gravity = GravityFlags.Center });
             HamJi.Core.Touch.Bind(close, Dismiss, 0.9f);
             root.AddView(close, new FrameLayout.LayoutParams(Dui.Dp(36), Dui.Dp(36))
@@ -88,9 +104,9 @@ namespace HamJi.Views
             bar.SetGravity(GravityFlags.CenterHorizontal);
             bar.Clickable = false;
 
-            bar.AddView(Pill(c, "取消", false, Dismiss));
-            bar.AddView(Pill(c, "分享", false, OnShare));
-            bar.AddView(Pill(c, "更新卡片", true, () =>
+            bar.AddView(Pill(c, "取消", false, fgColor, pillBg, Dismiss));
+            bar.AddView(Pill(c, "分享", false, fgColor, pillBg, OnShare));
+            bar.AddView(Pill(c, "更新卡片", true, fgColor, pillBgPrimary, () =>
             {
                 Dismiss();
                 try { onReplace?.Invoke(); } catch { }
@@ -100,7 +116,7 @@ namespace HamJi.Views
                 ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent)
             {
                 Gravity = GravityFlags.Bottom,
-                BottomMargin = Dui.Dp(40)
+                BottomMargin = Dui.Dp(20)
             });
 
             SetContentView(root);
@@ -109,13 +125,12 @@ namespace HamJi.Views
             root.Post(() => root.Animate().Alpha(1f).SetDuration(160).Start());
         }
 
-        private static TextView Pill(Context c, string text, bool primary, Action onClick)
+        private static TextView Pill(Context c, string text, bool primary, int fg, int bg, Action onClick)
         {
-            var tv = Dui.Label(text, 13f, Color.White, primary);
+            var tv = Dui.Label(text, 13f, fg, primary);
             tv.Gravity = GravityFlags.Center;
             tv.SetPadding(Dui.Dp(15), Dui.Dp(7), Dui.Dp(15), Dui.Dp(7));
-            tv.SetBackgroundDrawable(Dui.Round(
-                primary ? unchecked((int)0x3DFFFFFF) : unchecked((int)0x24FFFFFF), 18));
+            tv.SetBackgroundDrawable(Dui.Round(bg, 18));
             tv.Clickable = true;
             var lp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
@@ -184,8 +199,8 @@ namespace HamJi.Views
                 _gd = new GestureDetector(c, new TapListener(this));
             }
 
-            /// <summary>图片绘制区域：底部留一条纯黑浮层带，按钮永远落在黑底上，颜色不会随图片变化。</summary>
-            private int ContentBottom => Height - Dui.Dp(96);
+            /// <summary>图片绘制区域：底部只留一条按钮带，按钮永远落在纯色底上。</summary>
+            private int ContentBottom => Height - Dui.Dp(BarSpaceDp);
 
             /// <summary>退出时把大图从 native 堆还回去（几 MB 起步，连续看几张很容易顶内存）。</summary>
             public void Detach()

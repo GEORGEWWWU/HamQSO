@@ -407,7 +407,7 @@ namespace HamJi.Pages
         {
             if (Qsl.Has)
             {
-                QslPreviewDialog.Show(Context, Qsl.Main, OpenQslPicker);
+                ShowQslPreview();
                 return;
             }
 
@@ -427,6 +427,13 @@ namespace HamJi.Pages
                     OpenQslPicker();
                 })
                 .Show();
+        }
+
+        /// <summary>打开全屏预览（上传完成后也走这里，用户能立刻看到新卡片）。</summary>
+        internal void ShowQslPreview()
+        {
+            if (!Qsl.Has) return;
+            QslPreviewDialog.Show(Context, Qsl.Main, OpenQslPicker);
         }
 
         private void OpenQslPicker()
@@ -465,7 +472,12 @@ namespace HamJi.Pages
                     if (act.IsFinishing) return;
                     Toast.MakeText(act, ok ? "QSL 卡片已保存" : "保存失败：" + (error ?? "未知错误"),
                         ok ? ToastLength.Short : ToastLength.Long).Show();
-                    if (ok && act is MainActivity main) main.RefreshSettingsQsl();
+                    if (ok && act is MainActivity main)
+                    {
+                        main.RefreshSettingsQsl();
+                        // 上传完直接进预览：用户马上能看到新卡片
+                        main.PreviewSettingsQsl();
+                    }
                 });
             });
         }

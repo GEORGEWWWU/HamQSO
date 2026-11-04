@@ -672,6 +672,10 @@ namespace HamJi
         internal void RefreshSettingsQsl()
             => (_pages[2] as SettingsPage)?.RefreshQslValue();
 
+        /// <summary>上传成功后直接打开卡片全屏预览。</summary>
+        internal void PreviewSettingsQsl()
+            => (_pages[2] as SettingsPage)?.ShowQslPreview();
+
         private bool _blurPending;
 
         private int _lastBlurScrollY = -1;
