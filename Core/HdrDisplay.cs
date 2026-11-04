@@ -30,6 +30,9 @@ namespace HamJi.Core
         /// <summary>ActivityInfo.COLOR_MODE_HDR</summary>
         private const int ColorModeHdr = 2;
 
+        /// <summary>ActivityInfo.COLOR_MODE_DEFAULT</summary>
+        private const int ColorModeDefault = 0;
+
         /// <summary>当前屏幕/系统是否支持 HDR（API 26+ 且上报了 HDR 类型）。</summary>
         public static bool Supported { get; private set; }
 
@@ -86,23 +89,26 @@ namespace HamJi.Core
         }
 
         /// <summary>把窗口切到 HDR 色彩模式。返回是否真的切了。</summary>
-        public static bool EnableWindow(Android.Views.Window win)
+        public static bool EnableWindow(Android.Views.Window win) => SetWindowHdr(win, true);
+
+        /// <summary>按需开关窗口的 HDR 色彩模式（翻页时可能从 HDR 图切到 SDR 图）。</summary>
+        public static bool SetWindowHdr(Android.Views.Window win, bool on)
         {
             if (win == null) return false;
             Probe(win.Context);
-            if (!Supported) return false;
+            bool want = on && Supported;
 
             try
             {
                 var m = win.Class.GetMethod("setColorMode", Java.Lang.Integer.Type);
-                m.Invoke(win, new Java.Lang.Integer(ColorModeHdr));
-                Log.Info(Tag, "window color mode → HDR");
-                return true;
+                m.Invoke(win, new Java.Lang.Integer(want ? ColorModeHdr : ColorModeDefault));
+                Log.Info(Tag, "window color mode → " + (want ? "HDR" : "default"));
+                return want;
             }
             catch (Exception ex)
             {
-                Log.Info(Tag, "setColorMode(HDR) 失败：" + ex.Message);
-                return false;
+                Log.Info(Tag, "setColorMode(" + (want ? "HDR" : "default") + ") 失败：" + ex.Message);
+                return want;
             }
         }
 

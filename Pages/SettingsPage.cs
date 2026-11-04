@@ -400,8 +400,8 @@ namespace HamJi.Pages
         internal void RefreshQslValue() => ApplyQslValue();
 
         /// <summary>
-        /// 已有卡片：先全屏预览（取消 / 分享 / 更新卡片），更新才进选图；
-        /// 没有卡片：首次给一次本地存储提示，之后直接进系统选图。
+        /// 已有卡片：先全屏预览（分享 / 更新卡片 / 设为填写页），更新才进选图；
+        /// 没有卡片：首次给一次本地存储提示，之后直接进系统选图（可一次选两张：正面 + 反面）。
         /// </summary>
         private void PickQsl()
         {
@@ -413,7 +413,7 @@ namespace HamJi.Pages
 
             if (Qsl.Warned)
             {
-                OpenQslPicker();
+                OpenQslPicker(true);
                 return;
             }
 
@@ -424,7 +424,7 @@ namespace HamJi.Pages
                 .SetPositiveButton("继续", (s, e) =>
                 {
                     Qsl.MarkWarned();
-                    OpenQslPicker();
+                    OpenQslPicker(true);
                 })
                 .Show();
         }
@@ -433,16 +433,33 @@ namespace HamJi.Pages
         internal void ShowQslPreview()
         {
             if (!Qsl.Has) return;
-            QslPreviewDialog.Show(Context, Qsl.Main, OpenQslPicker);
+            QslPreviewDialog.Show(Context, slot =>
+            {
+                if (slot < 0) OpenQslPicker(true);       // 补上另一面
+                else OpenQslPickerForSlot(slot);         // 替换这一面
+            }, () =>
+            {
+                ApplyQslValue();
+                if (Qsl.Has) ShowQslPreview();           // 删掉一面后接着看另一面
+            });
         }
 
-        private void OpenQslPicker()
+        /// <summary>预览里点「更新卡片」：只替换当前这一面。</summary>
+        private void OpenQslPickerForSlot(int slot)
         {
+            _pendingSlot = slot;
+            OpenQslPicker(false);
+        }
+
+        private void OpenQslPicker(bool allowMultiple)
+        {
+            if (allowMultiple) _pendingSlot = -1;
             try
             {
                 var intent = new Intent(Intent.ActionOpenDocument);
                 intent.AddCategory(Intent.CategoryOpenable);
                 intent.SetType("image/*");
+                if (allowMultiple) intent.PutExtra(Intent.ExtraAllowMultiple, true);
                 ((Activity)Context).StartActivityForResult(intent, ReqQsl);
             }
             catch (Exception ex)
@@ -451,28 +468,72 @@ namespace HamJi.Pages
             }
         }
 
-        /// <summary>选图返回：后台复制 + 校验，成功后替换旧卡片并刷新文案。</summary>
+        /// <summary>本次选图要写进哪个槽位；-1 = 依次填进空槽（可多选）。</summary>
+        private static int _pendingSlot = -1;
+
+        /// <summary>取回选中的图片：多选走 ClipData，单选走 Data。</summary>
+        private static System.Collections.Generic.List<Android.Net.Uri> CollectUris(Intent data)
+        {
+            var list = new System.Collections.Generic.List<Android.Net.Uri>();
+            try
+            {
+                var clip = data?.ClipData;
+                if (clip != null && clip.ItemCount > 0)
+                {
+                    for (int i = 0; i < clip.ItemCount; i++)
+                    {
+                        var u = clip.GetItemAt(i)?.Uri;
+                        if (u != null) list.Add(u);
+                    }
+                }
+                else if (data?.Data != null)
+                {
+                    list.Add(data.Data);
+                }
+            }
+            catch { }
+            return list;
+        }
+
+        /// <summary>选图返回：后台复制 + 校验；多选按顺序填空槽，单选替换指定面。</summary>
         public static void HandleQslResult(Activity act, Result resultCode, Intent data)
         {
-            if (act == null || resultCode != Result.Ok || data?.Data == null) return;
+            if (act == null || resultCode != Result.Ok) return;
 
-            var uri = data.Data;
+            var uris = CollectUris(data);
+            if (uris.Count == 0) return;
+
+            int slot = _pendingSlot;
+            _pendingSlot = -1;
             var resolver = act.ContentResolver;
             Toast.MakeText(act, "正在保存卡片…", ToastLength.Short).Show();
 
             System.Threading.Tasks.Task.Run(() =>
             {
-                bool ok;
-                string error;
-                try { ok = Qsl.Import(resolver, uri, out error); }
-                catch (Exception ex) { ok = false; error = ex.Message; }
+                int saved;
+                string error = null;
+                try
+                {
+                    saved = slot >= 0
+                        ? (Qsl.SaveSlot(slot, resolver, uris[0], out error) ? 1 : 0)
+                        : Qsl.FillEmpty(resolver, uris, out error);
+                }
+                catch (Exception ex) { saved = 0; error = ex.Message; }
 
                 act.RunOnUiThread(() =>
                 {
                     if (act.IsFinishing) return;
-                    Toast.MakeText(act, ok ? "QSL 卡片已保存" : "保存失败：" + (error ?? "未知错误"),
-                        ok ? ToastLength.Short : ToastLength.Long).Show();
-                    if (ok && act is MainActivity main)
+
+                    if (saved == 0)
+                    {
+                        Toast.MakeText(act, "保存失败：" + (error ?? "未知错误"), ToastLength.Long).Show();
+                        return;
+                    }
+
+                    Toast.MakeText(act, saved > 1 ? "已保存 " + saved + " 张卡片" : "QSL 卡片已保存",
+                        ToastLength.Short).Show();
+
+                    if (act is MainActivity main)
                     {
                         main.RefreshSettingsQsl();
                         // 上传完直接进预览：用户马上能看到新卡片
