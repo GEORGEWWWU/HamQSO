@@ -53,9 +53,11 @@ namespace HamJi.Pages
             hero.AddView(desc, dlp);
             ListHost.AddView(hero);
 
-            // 呼号：单独一张卡（身份信息，不和下面的数据管理混在一起）
+            // 呼号 + 我的卡片：同一张卡（都是台站身份信息）
             var cardCall = Widgets.Card();
             cardCall.AddView(CallRow());
+            cardCall.AddView(Widgets.Divider());
+            cardCall.AddView(CardRow());
             ListHost.AddView(cardCall);
 
             ListHost.AddView(Gap());
@@ -335,6 +337,97 @@ namespace HamJi.Pages
                 if (clean == raw) return null;
                 return new Java.Lang.String(clean);
             }
+        }
+
+        // ---- 我的卡片（QSL）----
+
+        public const int ReqQsl = 0x51A3;
+
+        private TextView _qslValue;
+
+        /// <summary>「我的卡片」行：右侧只显示「还未上传 / 修改」，点了就去选图。</summary>
+        private LinearLayout CardRow()
+        {
+            TextView val;
+            var row = Widgets.SettingRow(Resource.Drawable.ic_card, "我的卡片",
+                Qsl.Has ? "修改" : "还未上传", false, true, 0, out val);
+            _qslValue = val;
+            ApplyQslValue();
+            row.Click += (s, e) => PickQsl();
+            return row;
+        }
+
+        private void ApplyQslValue()
+        {
+            if (_qslValue == null) return;
+            bool has = Qsl.Has;
+            _qslValue.Text = has ? "修改" : "还未上传";
+            _qslValue.SetTextColor(new Color(has ? Dui.Accent : Dui.TextTertiary));
+        }
+
+        /// <summary>导入成功后刷新右侧文案（由 Activity 回调）。</summary>
+        internal void RefreshQslValue() => ApplyQslValue();
+
+        /// <summary>首次上传才提示「只存本机 / 备份不含卡片」，之后直接进系统选图。</summary>
+        private void PickQsl()
+        {
+            if (Qsl.Warned)
+            {
+                OpenQslPicker();
+                return;
+            }
+
+            new AlertDialog.Builder(Context, Resource.Style.AppDialogTheme)
+                .SetTitle("卡片只保存在本机")
+                .SetMessage("QSL 卡片与日志一起存在本机，卸载 App 或换机会丢失，导出备份也不包含卡片，请自行做好备份。")
+                .SetNegativeButton("取消", (s, e) => { })
+                .SetPositiveButton("继续", (s, e) =>
+                {
+                    Qsl.MarkWarned();
+                    OpenQslPicker();
+                })
+                .Show();
+        }
+
+        private void OpenQslPicker()
+        {
+            try
+            {
+                var intent = new Intent(Intent.ActionOpenDocument);
+                intent.AddCategory(Intent.CategoryOpenable);
+                intent.SetType("image/*");
+                ((Activity)Context).StartActivityForResult(intent, ReqQsl);
+            }
+            catch (Exception ex)
+            {
+                Toast.MakeText(Context, "无法打开图片选择器：" + ex.Message, ToastLength.Short).Show();
+            }
+        }
+
+        /// <summary>选图返回：后台复制 + 校验，成功后替换旧卡片并刷新文案。</summary>
+        public static void HandleQslResult(Activity act, Result resultCode, Intent data)
+        {
+            if (act == null || resultCode != Result.Ok || data?.Data == null) return;
+
+            var uri = data.Data;
+            var resolver = act.ContentResolver;
+            Toast.MakeText(act, "正在保存卡片…", ToastLength.Short).Show();
+
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                bool ok;
+                string error;
+                try { ok = Qsl.Import(resolver, uri, out error); }
+                catch (Exception ex) { ok = false; error = ex.Message; }
+
+                act.RunOnUiThread(() =>
+                {
+                    if (act.IsFinishing) return;
+                    Toast.MakeText(act, ok ? "QSL 卡片已保存" : "保存失败：" + (error ?? "未知错误"),
+                        ok ? ToastLength.Short : ToastLength.Long).Show();
+                    if (ok && act is MainActivity main) main.RefreshSettingsQsl();
+                });
+            });
         }
 
         private void ShowThemeMenu(View anchor)        {

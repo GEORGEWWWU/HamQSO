@@ -639,6 +639,8 @@ namespace HamJi
                 SettingsPage.HandleExportResult(this, resultCode, data);
             else if (requestCode == SettingsPage.ReqImport)
                 SettingsPage.HandleImportResult(this, resultCode, data);
+            else if (requestCode == SettingsPage.ReqQsl)
+                SettingsPage.HandleQslResult(this, resultCode, data);
         }
 
         private void OnProfileChanged()
@@ -665,6 +667,10 @@ namespace HamJi
         private bool _selfChecking;
 
         internal void RelayoutBlur() => _nav?.RefreshBlur();
+
+        /// <summary>QSL 卡片导入完成后刷新设置页右侧文案（页面可能还没建）。</summary>
+        internal void RefreshSettingsQsl()
+            => (_pages[2] as SettingsPage)?.RefreshQslValue();
 
         private bool _blurPending;
 
