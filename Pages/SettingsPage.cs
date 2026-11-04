@@ -53,10 +53,9 @@ namespace HamJi.Pages
             hero.AddView(desc, dlp);
             ListHost.AddView(hero);
 
-            // 呼号 + 我的卡片：同一张卡（都是台站身份信息）
+            // 呼号 + 我的卡片：同一张卡（都是台站身份信息），行内不加分割线
             var cardCall = Widgets.Card();
             cardCall.AddView(CallRow());
-            cardCall.AddView(Widgets.Divider());
             cardCall.AddView(CardRow());
             ListHost.AddView(cardCall);
 
@@ -201,38 +200,51 @@ namespace HamJi.Pages
             return row;
         }
 
-        /// <summary>独立的呼号卡：图标比普通设置项大一档，右侧用等宽字体显示呼号。</summary>
-        private LinearLayout CallRow()
+        /// <summary>
+        /// 身份卡里的一行：内边距 / 图标尺寸 / 字号 / 间距全部沿用普通设置项（Widgets.SettingRow）的规格，
+        /// 这样同一页里所有标题的左边缘和行高都在同一条线上（15sp / 11dp 会让呼号与卡片这行整体错位 2dp）。
+        /// </summary>
+        private LinearLayout IdentityRow(int icon, string title, out TextView value)
         {
             var row = Dui.HBox();
             row.LayoutParameters = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.WrapContent);
-            row.SetPadding(Dui.Dp(16), Dui.Dp(14), Dui.Dp(14), Dui.Dp(14));
+            row.SetPadding(Dui.Dp(16), Dui.Dp(12), Dui.Dp(14), Dui.Dp(12));
             row.Clickable = true;
             row.Focusable = true;
             HamJi.Core.Touch.Press(row, 0.985f);
 
-            // ic_call 的视口裁到了图形本身，视觉大小和别的 21dp 图标一致
-            var ic = Dui.Icon(Resource.Drawable.ic_call, 21, Dui.Accent);
+            var ic = Dui.Icon(icon, 21, Dui.Accent);
             row.AddView(ic, new LinearLayout.LayoutParams(Dui.Dp(21), Dui.Dp(21)));
 
-            var tv = Dui.Label("我的呼号", 15f, Dui.TextPrimary, false);
+            var tv = Dui.Label(title, 14.5f, Dui.TextPrimary, false);
             row.AddView(tv, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WrapContent, 1f)
-            { LeftMargin = Dui.Dp(11) });
+            { LeftMargin = Dui.Dp(9) });
 
-            bool has = Profile.HasCall;
-            var val = Dui.Label(has ? Profile.Call : "未设置", has ? 14f : 12.5f,
-                has ? Dui.TextPrimary : Dui.TextTertiary, has);
-            if (has) val.SetTypeface(Typeface.Create("monospace", TypefaceStyle.Normal), TypefaceStyle.Normal);
-            val.LetterSpacing = has ? 0.06f : 0f;
-            val.SetSingleLine(true);
-            row.AddView(val, new LinearLayout.LayoutParams(
+            value = Dui.Label("", 12.5f, Dui.TextTertiary, false);
+            value.SetSingleLine(true);
+            row.AddView(value, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WrapContent, ViewGroup.LayoutParams.WrapContent)
             { RightMargin = Dui.Dp(4) });
 
             var ch = Dui.Icon(Resource.Drawable.ic_chevron, 16, Dui.TextTertiary);
             ch.Alpha = 0.7f;
             row.AddView(ch, new LinearLayout.LayoutParams(Dui.Dp(16), Dui.Dp(16)) { LeftMargin = Dui.Dp(4) });
+            return row;
+        }
+
+        /// <summary>呼号行：右侧等宽字体显示呼号，未设置时降一档。</summary>
+        private LinearLayout CallRow()
+        {
+            TextView val;
+            var row = IdentityRow(Resource.Drawable.ic_call, "我的呼号", out val);
+
+            bool has = Profile.HasCall;
+            val.Text = has ? Profile.Call : "未设置";
+            val.SetTextSize(Android.Util.ComplexUnitType.Sp, has ? 14f : 12.5f);
+            val.SetTextColor(new Color(has ? Dui.TextPrimary : Dui.TextTertiary));
+            if (has) val.SetTypeface(Typeface.Create("monospace", TypefaceStyle.Normal), TypefaceStyle.Normal);
+            val.LetterSpacing = has ? 0.06f : 0f;
 
             row.Click += (s, e) => EditCall();
             return row;
@@ -345,24 +357,25 @@ namespace HamJi.Pages
 
         private TextView _qslValue;
 
-        /// <summary>「我的卡片」行：右侧只显示「还未上传 / 修改」，点了就去选图。</summary>
+        /// <summary>「我的卡片」行：与呼号行同几何、无分割线，右侧只显示「还未上传 / 修改」。</summary>
         private LinearLayout CardRow()
         {
             TextView val;
-            var row = Widgets.SettingRow(Resource.Drawable.ic_card, "我的卡片",
-                Qsl.Has ? "修改" : "还未上传", false, true, 0, out val);
+            var row = IdentityRow(Resource.Drawable.ic_card, "我的卡片", out val);
             _qslValue = val;
             ApplyQslValue();
             row.Click += (s, e) => PickQsl();
             return row;
         }
 
+        /// <summary>右侧文案随状态切换：未上传走三级文字色，已上传用主题强调色（换主题即时生效）。</summary>
         private void ApplyQslValue()
         {
             if (_qslValue == null) return;
             bool has = Qsl.Has;
             _qslValue.Text = has ? "修改" : "还未上传";
             _qslValue.SetTextColor(new Color(has ? Dui.Accent : Dui.TextTertiary));
+            _qslValue.SetTypeface(has ? Dui.Medium : Dui.Regular, TypefaceStyle.Normal);
         }
 
         /// <summary>导入成功后刷新右侧文案（由 Activity 回调）。</summary>
