@@ -90,6 +90,10 @@ $ADB logcat -d -t 500 | grep -iE "hamji|AndroidRuntime|FATAL"
 ```
 
 - `am start -W` 直接给出冷启毫秒数，比肉眼估快。
+- **禁止把测试文件写到手机用户目录**（用户 2026-11-04 明确禁止）：截图一律
+  `exec-out screencap -p > shots/x.png`（本地管道，手机上不落文件）；`uiautomator dump`
+  只写 `/data/local/tmp/ui.xml`，看完 `rm -f`。`/sdcard`、`Pictures`、`DCIM`、`Download` 会进相册和
+  图片选择器，污染用户设备。收尾 `adb shell ls /sdcard | grep -Ei "\.png|\.xml"` 必须为空。
 - **不要用 `uiautomator dump` 判崩溃**：进程死了会给你上一次的残树。判存活用
   `adb shell pidof com.hamji.app`，判崩溃用 logcat 里的 `FATAL EXCEPTION` / `mono-rt`。
 - 截图后看图的顺序：先看有没有白屏/半透明遮罩残留，再看间距对齐，最后看字号颜色。
